@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Valorant-like</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0d1117;
+            font:13px/1.5 ui-monospace,Consolas,monospace;color:#cfe3ee}
+  canvas{display:block}
+  #overlay{position:fixed;inset:0;z-index:2;display:grid;place-content:center;text-align:center;
+           background:rgba(8,12,16,.86);cursor:pointer;letter-spacing:.04em}
+  #overlay h1{margin:0 0 1em;font-size:24px;letter-spacing:.22em;color:#4ee1e8;font-weight:600}
+  #overlay p{margin:.3em 0;opacity:.75}
+  #backLink{position:fixed;left:10px;bottom:10px;z-index:2;color:#cfe3ee;opacity:.55;
+            text-decoration:none;font-size:12px}
+  #backLink:hover{opacity:1}
+</style>
+<link rel="stylesheet" href="./css/hud.css">
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.169.0/build/three.module.js"}}
+</script>
+</head>
+<body>
+<a id="backLink" href="/">← portail.io</a>
+<div id="overlay">
+  <h1>VALORANT-LIKE</h1>
+  <p>Clic pour jouer — Échap pour libérer la souris</p>
+  <p>ZQSD / WASD &nbsp;·&nbsp; Espace = saut &nbsp;·&nbsp; Ctrl = accroupi &nbsp;·&nbsp; B = head-bob</p>
+  <p>Clic = tir &nbsp;·&nbsp; Clic droit = visée &nbsp;·&nbsp; R = recharger &nbsp;·&nbsp; 1/2/3 = armes &nbsp;·&nbsp; G = changer de principale</p>
+  <p>C / Q / E = capacités &nbsp;·&nbsp; X = ultime &nbsp;—&nbsp; touche pour équiper, clic pour lancer</p>
+  <p>F maintenu = poser / désamorcer le spike &nbsp;·&nbsp; achat au début de chaque round</p>
+  <p>Tab maintenu = tableau des scores &nbsp;·&nbsp; ← → = changer de joueur observé (une fois mort)</p>
+</div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

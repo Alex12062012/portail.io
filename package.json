@@ -1,0 +1,36 @@
+{
+  "name": "game-portal",
+  "version": "1.0.0",
+  "description": "portail.io — portail de mini-jeux multijoueurs (Express + Socket.io + Canvas 2D). npm start lance le serveur + un tunnel ngrok.",
+  "main": "server/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "server-only": "node server/server.js --no-tunnel",
+    "dev": "node --watch server/server.js --no-tunnel",
+    "test": "node tests/maps.mjs && node tests/unit-tag.mjs && node tests/unit-mine.mjs && node tests/smoke.mjs && node tests/smoke-mine.mjs && node tests/smoke-valorant.mjs && node tests/smoke-valorant-1v3.mjs",
+    "map-compare": "node scripts/map-compare.mjs"
+  },
+  "keywords": [
+    "games",
+    "portal",
+    "multiplayer",
+    "socket.io",
+    "canvas",
+    "ngrok"
+  ],
+  "author": "Alexandre",
+  "license": "MIT",
+  "dependencies": {
+    "@ngrok/ngrok": "^1.4.1",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0",
+    "socket.io-client": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

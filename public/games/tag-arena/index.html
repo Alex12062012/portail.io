@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tag Arena — portail.io</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/games/tag-arena/tag.css">
+</head>
+<body>
+
+  <!-- ============ écran menu (choix du mode) ============ -->
+  <section id="screenMenu" class="screen">
+    <header class="mini-bar">
+      <a class="back" href="/">← Portail</a>
+      <div class="logo"><span class="bolt">⚡</span>portail<span class="dotio">.io</span></div>
+    </header>
+    <h1 class="game-title">TAG ARENA</h1>
+    <p class="sub">Ne sois pas le chat quand le temps s'arrête !</p>
+
+    <div class="mode-cards">
+      <div class="mode-card">
+        <h2>🌍 Tous ensemble</h2>
+        <p>Partie publique immédiate — les bots complètent les places vides.</p>
+        <button id="btnQuick" class="primary">Jouer ▶</button>
+      </div>
+
+      <div class="mode-card">
+        <h2>👥 Avec des amis</h2>
+        <p>Crée un salon et partage son code à 4 lettres (2 à 4 joueurs).</p>
+        <button id="btnCreate" class="primary alt">Créer un salon</button>
+        <button id="btnShowJoin" class="ghost">Rejoindre avec un code</button>
+        <div id="joinRow" class="join-row" hidden>
+          <input id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false">
+          <button id="btnJoin" class="primary">OK</button>
+        </div>
+      </div>
+    </div>
+    <p id="menuError" class="error"></p>
+
+    <div class="help">
+      <strong>Contrôles :</strong> ZQSD / flèches pour bouger · Z, ↑ ou Espace pour sauter<br>
+      <strong>Règle :</strong> le chat 😈 doit toucher un joueur pour lui refiler le rôle.
+      Celui qui est le chat à la fin des 90 s a perdu !
+    </div>
+  </section>
+
+  <!-- ============ écran salon (avec des amis) ============ -->
+  <section id="screenLobby" class="screen" hidden>
+    <h2 class="lobby-title">Salon <span id="lobbyCode" class="code"></span></h2>
+    <p class="sub">Partage ce code avec tes amis pour qu'ils te rejoignent !</p>
+    <ul id="lobbyPlayers" class="player-list"></ul>
+    <p id="lobbyHint" class="hint"></p>
+    <div class="lobby-actions">
+      <button id="btnStart" class="primary" hidden>Lancer la partie ▶</button>
+      <button id="btnLeaveLobby" class="ghost">Quitter le salon</button>
+    </div>
+  </section>
+
+  <!-- ============ écran de jeu ============ -->
+  <section id="screenGame" class="screen game-screen" hidden>
+    <div class="game-wrap">
+      <canvas id="game" width="1280" height="720"></canvas>
+
+      <button id="btnMute" class="btn-mute" title="Couper le son" aria-label="Couper le son">🔊</button>
+      <button id="btnQuitPlaying" class="btn-quit-ingame" title="Quitter la partie">Quitter ✕</button>
+
+      <div id="endOverlay" class="overlay see-through" hidden>
+        <div class="end-box">
+          <h2 id="endTitle"></h2>
+          <p id="endDetail"></p>
+          <ol id="endRanking" class="ranking" hidden></ol>
+          <div class="end-actions">
+            <button id="btnReplay" class="primary">Rejouer</button>
+            <button id="btnMenu" class="ghost">Retour au menu</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- mode élimination : écran du joueur qui vient d'exploser
+           (vue d'ensemble dézoomée visible derrière, comme la référence) -->
+      <div id="explodedOverlay" class="overlay see-through exploded" hidden>
+        <div class="exploded-box">
+          <h2>💥 VOUS AVEZ EXPLOSÉ</h2>
+          <p id="explodedPlace"></p>
+          <button id="btnExit" class="btn-exit">EXIT</button>
+          <button id="btnQuitGame" class="btn-quit">Quitter la partie</button>
+        </div>
+      </div>
+
+      <div id="noticeOverlay" class="overlay" hidden>
+        <div class="end-box">
+          <h2 id="noticeTitle"></h2>
+          <button id="btnNoticeMenu" class="primary">Retour au menu</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/games/tag-arena/main.js"></script>
+</body>
+</html>

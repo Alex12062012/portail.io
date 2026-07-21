@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mine Coop — portail.io</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/games/mine-coop/mine.css">
+</head>
+<body>
+
+  <!-- ============ écran menu (créer / rejoindre un monde) ============ -->
+  <section id="screenMenu" class="screen">
+    <header class="mini-bar">
+      <a class="back" href="/">← Portail</a>
+      <div class="logo"><span class="bolt">⚡</span>portail<span class="dotio">.io</span></div>
+    </header>
+    <h1 class="game-title">MINE COOP</h1>
+    <p class="sub">Mine, fabrique, construis — et survis aux zombies la nuit, ensemble.</p>
+
+    <div class="name-row">
+      <label for="nameInput">Pseudo</label>
+      <input id="nameInput" maxlength="16" placeholder="2 à 16 caractères" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="mode-cards">
+      <div class="mode-card">
+        <h2>🌍 Créer un monde</h2>
+        <p>Génère un nouveau monde (ou recharge une sauvegarde via son code). Partage le code du salon pour jouer à plusieurs.</p>
+        <button id="btnShowCreate" class="primary alt">Créer un monde</button>
+        <div id="createPanel" class="create-panel" hidden>
+          <input id="worldCodeInput" maxlength="8" placeholder="Code du monde (optionnel)" autocomplete="off" spellcheck="false">
+          <p class="field-hint">4 à 8 lettres/chiffres. Réutilise un code pour rouvrir ce monde. Laisse vide pour un code de salon aléatoire.</p>
+          <div id="savesBox" class="saves-box" hidden>
+            <strong>Mondes sauvegardés</strong>
+            <ul id="savesList"></ul>
+            <p id="lruWarn" class="lru-warn" hidden></p>
+          </div>
+          <button id="btnCreate" class="primary">Lancer la création ▶</button>
+        </div>
+      </div>
+
+      <div class="mode-card">
+        <h2>👥 Rejoindre</h2>
+        <p>Tu as un code de salon à 4 lettres ? Rejoins le monde de tes amis.</p>
+        <div class="join-row">
+          <input id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false">
+          <button id="btnJoin" class="primary">Rejoindre</button>
+        </div>
+      </div>
+    </div>
+    <p id="menuError" class="error"></p>
+
+    <div class="help">
+      <strong>Contrôles :</strong> ←/→ ou A/D pour bouger · Espace/W/↑ pour sauter ·
+      <strong>clic gauche</strong> miner · <strong>clic droit</strong> poser (ou frapper un zombie) ·
+      <strong>1-9</strong> hotbar · <strong>E</strong> attaquer · <strong>I</strong> inventaire/craft ·
+      <strong>M</strong> téléportation.
+    </div>
+  </section>
+
+  <!-- ============ écran salon ============ -->
+  <section id="screenLobby" class="screen" hidden>
+    <header class="mini-bar">
+      <a class="back" href="/">← Portail</a>
+      <div class="logo"><span class="bolt">⚡</span>portail<span class="dotio">.io</span></div>
+    </header>
+    <h2 class="lobby-title">Salon <span id="lobbyCode" class="code"></span></h2>
+    <p class="sub">Partage ce code pour que tes amis rejoignent ton monde (1 à 4 joueurs).</p>
+    <ul id="lobbyPlayers" class="player-list"></ul>
+    <p id="lobbyHint" class="hint"></p>
+    <div class="lobby-actions">
+      <button id="btnStart" class="primary" hidden>Entrer dans le monde ▶</button>
+      <button id="btnLeaveLobby" class="ghost">Quitter le salon</button>
+    </div>
+  </section>
+
+  <!-- ============ écran de jeu ============ -->
+  <section id="screenGame" class="screen game-screen" hidden>
+    <div class="game-wrap">
+      <canvas id="game" width="1280" height="720"></canvas>
+
+      <!-- HUD haut droite : coordonnées + téléportation -->
+      <div id="hudTopRight" class="hud-right">
+        <div class="coords">X <b id="coordX">0</b> &nbsp; Y <b id="coordY">0</b> <span id="tableTag" class="table-tag" title="Établi à portée" hidden>🛠️</span></div>
+        <div class="tp-row">
+          <input id="tpX" type="number" placeholder="X" autocomplete="off">
+          <input id="tpY" type="number" placeholder="Y" autocomplete="off">
+          <button id="btnTeleport" class="tp-btn" title="Téléporter (M)">Téléporter</button>
+        </div>
+        <button id="btnQuitPlaying" class="btn-quit-ingame" title="Quitter le monde">Quitter ✕</button>
+      </div>
+
+      <!-- hotbar -->
+      <div id="hotbar" class="hotbar"></div>
+
+      <!-- inventaire + grille de craft (Tab) -->
+      <div id="invOverlay" class="overlay panel-overlay" hidden>
+        <div class="panel inv-panel">
+          <header class="panel-head">
+            <h2>Inventaire</h2>
+            <span id="invStation" class="station-tag" hidden>🛠️ Établi</span>
+            <span class="spacer"></span>
+            <button id="btnSmelt" class="ghost small" title="Fondre le minerai (près d'un fourneau)">🔥 Fondre</button>
+            <button id="btnCloseInv" class="ghost small">Fermer ✕</button>
+          </header>
+          <div class="craft-row">
+            <div id="craftGrid" class="craft-grid"></div>
+            <span class="craft-arrow">→</span>
+            <div id="craftOutput" class="slot craft-out" title="Résultat — clic pour fabriquer"></div>
+          </div>
+          <h3 class="sec-label">Sac</h3>
+          <div id="bagGrid" class="slot-grid bag"></div>
+          <h3 class="sec-label">Hotbar</h3>
+          <div id="hotbarGrid" class="slot-grid"></div>
+          <p class="inv-help">Glisser : déplacer · clic droit-glisser : moitié · Maj+clic : envoyer vers l'autre zone</p>
+        </div>
+      </div>
+
+      <!-- coffre partagé (clic droit sur un coffre) -->
+      <div id="chestOverlay" class="overlay panel-overlay" hidden>
+        <div class="panel inv-panel">
+          <header class="panel-head">
+            <h2>Coffre</h2><span class="spacer"></span>
+            <button id="btnCloseChest" class="ghost small">Fermer ✕</button>
+          </header>
+          <div id="chestGrid" class="slot-grid chest"></div>
+          <hr class="sep">
+          <h3 class="sec-label">Sac</h3>
+          <div id="chestBagGrid" class="slot-grid bag"></div>
+          <h3 class="sec-label">Hotbar</h3>
+          <div id="chestHotbar" class="slot-grid"></div>
+        </div>
+      </div>
+
+      <!-- menu pause (Échap) -->
+      <div id="escOverlay" class="overlay panel-overlay" hidden>
+        <div class="panel esc-panel" id="escMain">
+          <h2>Menu</h2>
+          <button id="escResume" class="primary">Reprendre</button>
+          <button id="escSave" class="ghost">💾 Sauvegarder</button>
+          <button id="escStats" class="ghost">📊 Statistiques</button>
+          <button id="escSetCode" class="ghost">🔑 Changer de code</button>
+          <button id="escKeybinds" class="ghost">⌨️ Touches</button>
+          <button id="escQuit" class="ghost danger">Quitter le monde</button>
+        </div>
+        <div class="panel esc-panel sub-panel" id="keybindPanel" hidden>
+          <h3>Configurer les touches</h3>
+          <div id="keybindList" class="keybind-list"></div>
+          <p id="keybindHint" class="field-hint"></p>
+          <div class="sub-actions">
+            <button id="keybindReset" class="ghost small">Réinitialiser</button>
+            <button id="keybindBack" class="ghost small">← Retour</button>
+          </div>
+        </div>
+        <div class="panel esc-panel sub-panel" id="statsPanel" hidden>
+          <h3>Statistiques</h3>
+          <div id="statsContent" class="stats-content"></div>
+          <button id="statsBack" class="ghost">← Retour</button>
+        </div>
+        <div class="panel esc-panel sub-panel" id="setCodePanel" hidden>
+          <h3>Changer de code du monde</h3>
+          <p class="field-hint">Code actuel : <b id="curCode"></b></p>
+          <input id="newCodeInput" maxlength="8" placeholder="4 à 8 lettres/chiffres" autocomplete="off" spellcheck="false">
+          <p id="setCodeError" class="error"></p>
+          <div class="sub-actions">
+            <button id="setCodeConfirm" class="primary">Confirmer</button>
+            <button id="setCodeBack" class="ghost small">← Retour</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- item « tenu » pendant un glisser + toast de notification -->
+      <div id="dragGhost" class="drag-ghost" hidden></div>
+      <div id="toast" class="toast" hidden></div>
+
+      <!-- avis : connexion perdue / monde fermé -->
+      <div id="noticeOverlay" class="overlay" hidden>
+        <div class="end-box">
+          <h2 id="noticeTitle"></h2>
+          <button id="btnNoticeMenu" class="primary">Retour au menu</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/games/mine-coop/main.js"></script>
+</body>
+</html>

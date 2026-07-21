@@ -1,0 +1,155 @@
+/* HUD complet (prompt 7). Dark UI, accents cyan, police condensée. */
+:root {
+  --cyan: #4ee1e8;
+  --ally: #35e0c0;
+  --enemy: #ff4d4d;
+  --gold: #ffc44d;
+  --panel: rgba(8, 12, 16, 0.62);
+  --edge: #263039;
+}
+#hudRoot {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  font-family: 'Bahnschrift', 'Arial Narrow', 'Segoe UI', sans-serif;
+  color: #cfe3ee; font-size: 14px;
+}
+#hudRoot .panel { background: var(--panel); border: 1px solid var(--edge); }
+
+/* --- Timer + score, en haut au centre --- */
+#topbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: stretch; gap: 2px; text-align: center; }
+#topbar .score { width: 52px; display: grid; place-content: center;
+  font-size: 26px; font-weight: 700; }
+#topbar .s0 { color: var(--ally); }
+#topbar .s1 { color: var(--enemy); }
+#topbar .mid { padding: 4px 16px; min-width: 84px; }
+#topbar .clock { font-size: 22px; font-weight: 700; letter-spacing: .06em; }
+#topbar .clock.low { color: var(--enemy); animation: blink 0.5s steps(2) infinite; }
+#topbar .clock.spike { color: var(--gold); animation: blink 0.5s steps(2) infinite; }
+#topbar .round { font-size: 10px; letter-spacing: .22em; opacity: .6; }
+@keyframes blink { 50% { opacity: .35; } }
+
+/* --- Vie + armure + crédits, en bas à gauche --- */
+#hpbox { position: absolute; left: 12px; bottom: 12px; padding: 10px 14px; min-width: 220px; }
+#hpbox .agent { font-size: 11px; letter-spacing: .24em; color: var(--cyan); }
+#hpbox .bar { height: 7px; margin: 7px 0 5px; background: #1a222b; }
+#hpbox .bar div { height: 100%; background: var(--ally); transition: width .15s; }
+#hpbox .row { display: flex; gap: 12px; align-items: baseline; }
+#hpbox .hp { font-size: 24px; font-weight: 700; }
+#hpbox .sh { color: var(--cyan); font-size: 13px; }
+#hpbox .cr { margin-left: auto; color: var(--gold); font-size: 15px; }
+
+/* --- Munitions, en bas à droite --- */
+#ammo { position: absolute; right: 12px; bottom: 12px; padding: 10px 14px;
+  text-align: right; min-width: 140px; }
+#ammo .wn { font-size: 11px; letter-spacing: .2em; opacity: .65; }
+#ammo .mag { font-size: 26px; font-weight: 700; }
+#ammo .res { opacity: .55; }
+#ammo .rl { display: none; font-size: 10px; letter-spacing: .18em; color: var(--gold); }
+#ammo.reloading .rl { display: block; animation: blink .6s steps(2) infinite; }
+
+/* --- Capacités, en bas au centre --- */
+#abil { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  display: flex; gap: 4px; }
+#abil .slot { width: 86px; padding: 7px 9px 6px; position: relative; }
+#abil .slot b { font-size: 17px; color: var(--cyan); }
+#abil .slot .nm { display: block; font-size: 9px; letter-spacing: .06em; opacity: .6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#abil .slot i { position: absolute; top: 6px; right: 8px; font-style: normal;
+  font-size: 12px; color: var(--gold); }
+#abil .slot.off { opacity: .38; }
+#abil .slot.on { border-color: var(--cyan); background: rgba(18, 51, 58, .8); }
+#abil .slot.ready { border-color: var(--gold); }
+
+/* --- Action en cours (pose / désamorçage), sous le viseur --- */
+#action { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%);
+  text-align: center; display: none; }
+#action.on { display: block; }
+#action span { font-size: 12px; letter-spacing: .14em; }
+/* Anneau de progression : conic-gradient piloté par --p (0-100), trou au centre. */
+#action .ring { width: 74px; height: 74px; margin: 8px auto 0; border-radius: 50%;
+  background: conic-gradient(var(--gold) calc(var(--p, 0) * 1%), rgba(207, 227, 238, .13) 0); }
+#action .ring::after { content: ''; display: block; width: 56px; height: 56px; margin: 9px;
+  border-radius: 50%; background: #0b1016; }
+
+/* --- Indicateur directionnel : dégâts reçus + spike posé --- */
+#dmgring { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+#dmgring > div { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+#dmgring .hitdir::before, #dmgring .spike::before {
+  content: ''; position: absolute; left: -30px; top: -112px; width: 60px; height: 10px;
+  border-radius: 50% / 100% 100% 0 0; }
+#dmgring .hitdir::before {
+  background: linear-gradient(to bottom, var(--enemy), rgba(255, 77, 77, 0)); }
+#dmgring .spike::before {
+  left: -13px; top: -128px; width: 26px; height: 7px; opacity: .8;
+  background: linear-gradient(to bottom, var(--gold), rgba(255, 196, 77, 0)); }
+
+/* --- Bannière ATTAQUE / DÉFENSE en début de round --- */
+#roundflash { position: absolute; left: 50%; top: 34%; transform: translateX(-50%);
+  font-size: 46px; font-weight: 700; letter-spacing: .34em; white-space: nowrap;
+  opacity: 0; text-shadow: 0 3px 20px #000; }
+#roundflash.atk { color: var(--enemy); animation: flash 2s ease-out; }
+#roundflash.def { color: var(--ally); animation: flash 2s ease-out; }
+@keyframes flash {
+  0% { opacity: 0; letter-spacing: .5em; }
+  15% { opacity: 1; letter-spacing: .34em; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* --- Killfeed, en haut à droite --- */
+#feed { position: absolute; top: 44px; right: 12px; display: flex;
+  flex-direction: column; gap: 4px; align-items: flex-end; }
+#feed .row { padding: 4px 10px; font-size: 12px; letter-spacing: .04em; }
+#feed .a { color: var(--ally); font-weight: 700; }
+#feed .e { color: var(--enemy); font-weight: 700; }
+#feed .w { margin: 0 7px; font-size: 10px; color: var(--gold); letter-spacing: .1em; }
+
+/* --- Scoreboard (Tab maintenu) --- */
+#board { position: absolute; inset: 0; display: none; place-content: center;
+  background: rgba(5, 8, 11, .72); }
+#board.on { display: grid; }
+#board table { border-collapse: collapse; min-width: 560px; }
+#board caption { font-size: 16px; letter-spacing: .3em; color: var(--cyan);
+  padding-bottom: 10px; }
+#board th { font-size: 10px; letter-spacing: .18em; opacity: .5; font-weight: 400;
+  padding: 4px 14px; text-align: left; }
+#board td { padding: 6px 14px; background: var(--panel); border-top: 1px solid var(--edge); }
+#board tr.me td { border-left: 2px solid var(--cyan); }
+#board tr.dead td { opacity: .4; }
+#board .t0 td:first-child { color: var(--ally); }
+#board .t1 td:first-child { color: var(--enemy); }
+#board .gap td { background: none; border: 0; padding: 5px; }
+
+/* --- Étiquettes au-dessus des têtes --- */
+#labels { position: absolute; inset: 0; overflow: hidden; }
+#labels .tag { position: absolute; transform: translate(-50%, -100%);
+  text-align: center; font-size: 11px; letter-spacing: .1em; }
+#labels .tag .n { color: var(--ally); text-shadow: 0 1px 4px #000; }
+#labels .tag .b { width: 44px; height: 4px; margin: 2px auto 0; background: #1a222b; }
+#labels .tag .b div { height: 100%; background: var(--ally); }
+#labels .tag.enemy .b div { background: var(--enemy); }
+
+/* --- Bannières --- */
+#banner { position: absolute; left: 50%; top: 20%; transform: translateX(-50%);
+  font-size: 24px; letter-spacing: .2em; color: var(--cyan);
+  text-shadow: 0 2px 14px #000; white-space: nowrap; }
+#endscreen { position: absolute; inset: 0; display: none; place-content: center;
+  gap: 14px; text-align: center; background: rgba(5, 8, 11, .85); pointer-events: auto; }
+#endscreen.on { display: grid; }
+#endscreen h1 { margin: 0; font-size: 34px; letter-spacing: .3em; color: var(--cyan); }
+#endscreen .sc { font-size: 26px; }
+#endscreen .mvp { opacity: .75; letter-spacing: .12em; }
+#endscreen button { margin: 10px auto 0; padding: 12px 26px; cursor: pointer;
+  font: inherit; letter-spacing: .2em; color: var(--cyan);
+  background: #12333a; border: 1px solid var(--cyan); }
+#endscreen button:hover { background: #1a4650; }
+
+/* --- Mort --- */
+#dead { position: absolute; inset: 0; display: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(120, 10, 10, .35));
+}
+#dead.on { display: block; }
+#dead span { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
+  font-size: 18px; letter-spacing: .4em; color: var(--enemy); }
+#dead em { position: absolute; left: 50%; top: calc(30% + 26px); transform: translateX(-50%);
+  font-style: normal; font-size: 12px; letter-spacing: .16em; opacity: .8; white-space: nowrap; }

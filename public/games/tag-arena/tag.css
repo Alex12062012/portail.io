@@ -1,0 +1,316 @@
+/* tag.css — écrans du jeu Tag Arena (même identité que le portail) */
+
+/* l'attribut hidden doit gagner contre tout display: défini plus bas */
+[hidden] { display: none !important; }
+
+:root {
+  --bg: #0e1020;
+  --panel: #181b31;
+  --panel-2: #1f2340;
+  --ink: #eef0ff;
+  --muted: #9aa0c3;
+  --accent: #ffd60a;
+  --accent-2: #7c5cff;
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(1100px 500px at 80% -10%, rgba(124, 92, 255, .18), transparent 60%),
+    var(--bg);
+  color: var(--ink);
+  font-family: 'Outfit', system-ui, sans-serif;
+}
+
+.screen {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 18px 24px 40px;
+  text-align: center;
+}
+
+.mini-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.back {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+.back:hover { color: var(--ink); }
+
+.logo {
+  font-family: 'Bungee', sans-serif;
+  font-size: 20px;
+  user-select: none;
+}
+.logo .bolt { color: var(--accent); }
+.logo .dotio { color: var(--accent-2); }
+
+.game-title {
+  font-family: 'Bungee', sans-serif;
+  font-size: clamp(34px, 7vw, 56px);
+  margin: 34px 0 4px;
+  color: var(--accent);
+  text-shadow: 0 4px 26px rgba(255, 214, 10, .25);
+}
+.sub { color: var(--muted); margin: 0 0 30px; }
+
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 22px;
+  text-align: left;
+}
+.mode-card {
+  background: var(--panel);
+  border: 1px solid #2a2f55;
+  border-radius: var(--radius);
+  padding: 22px 24px;
+}
+.mode-card h2 { margin: 0 0 8px; font-size: 21px; }
+.mode-card p { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+
+button {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 20px;
+  cursor: pointer;
+  transition: filter .12s ease, transform .12s ease;
+}
+button:hover { filter: brightness(1.1); }
+button:active { transform: scale(.98); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+.primary { background: var(--accent); color: #14160a; width: 100%; margin-bottom: 8px; }
+.primary.alt { background: var(--accent-2); color: #fff; }
+.ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid #343a66;
+  width: 100%;
+}
+.ghost:hover { color: var(--ink); }
+
+.join-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.join-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #3a4070;
+  background: #11132a;
+  color: var(--ink);
+  font-size: 20px;
+  font-family: 'Bungee', monospace;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 6px;
+  outline: none;
+}
+.join-row input:focus { border-color: var(--accent-2); }
+.join-row .primary { width: auto; margin: 0; }
+
+.error { color: #ff5d7a; min-height: 20px; margin: 14px 0 0; }
+
+.help {
+  margin-top: 34px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+  background: var(--panel);
+  border: 1px solid #2a2f55;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+}
+
+/* ---- lobby ---- */
+.lobby-title { font-size: 26px; margin: 60px 0 4px; }
+.code {
+  font-family: 'Bungee', monospace;
+  color: var(--accent);
+  letter-spacing: 8px;
+  margin-left: 6px;
+}
+.player-list {
+  list-style: none;
+  padding: 0;
+  margin: 26px auto;
+  max-width: 360px;
+}
+.player-list li {
+  background: var(--panel);
+  border: 1px solid #2a2f55;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.player-list li.me { border-color: var(--accent-2); }
+.hint { color: var(--muted); min-height: 20px; }
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+/* ---- jeu ---- */
+.game-screen {
+  max-width: none;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.game-wrap {
+  position: relative;
+  line-height: 0;
+}
+#game {
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border-radius: 6px;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 6, 14, .72);
+  backdrop-filter: blur(3px);
+  line-height: 1.5;
+}
+.end-box {
+  background: var(--panel-2);
+  border: 1px solid #2f3560;
+  border-radius: var(--radius);
+  padding: 34px 44px;
+  text-align: center;
+  max-width: min(440px, 90vw);
+}
+.end-box h2 { font-size: 30px; margin: 0 0 10px; }
+.end-box p { color: var(--muted); margin: 0 0 22px; }
+.end-actions { display: flex; flex-direction: column; gap: 8px; }
+
+/* overlays translucides : la vue d'ensemble de la carte reste visible derrière */
+.overlay.see-through {
+  background: rgba(8, 10, 22, .42);
+  backdrop-filter: none;
+}
+.overlay.see-through .end-box {
+  background: rgba(24, 27, 49, .92);
+}
+
+/* classement de fin de manche (mode élimination) */
+.ranking {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  text-align: left;
+}
+.ranking li {
+  background: rgba(17, 19, 42, .8);
+  border: 1px solid #2a2f55;
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.ranking li.me { border-color: var(--accent); }
+
+/* écran "VOUS AVEZ EXPLOSÉ" (référence TAG 2 : texte sur la carte + EXIT) */
+.overlay.exploded {
+  align-items: flex-start;
+  padding-top: 36px;
+}
+.exploded-box {
+  text-align: center;
+  line-height: 1.4;
+}
+.exploded-box h2 {
+  font-family: 'Bungee', sans-serif;
+  font-size: clamp(28px, 5vw, 46px);
+  color: #fff;
+  margin: 0 0 6px;
+  text-shadow: 0 4px 24px rgba(255, 51, 85, .8), 0 2px 0 rgba(0, 0, 0, .6);
+}
+.exploded-box p {
+  color: #ffd9e2;
+  font-weight: 600;
+  margin: 0 0 18px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .8);
+}
+.btn-exit {
+  background: #e0312f;
+  color: #fff;
+  font-family: 'Bungee', sans-serif;
+  font-size: 18px;
+  letter-spacing: 2px;
+  padding: 12px 46px;
+  border-radius: 12px;
+  box-shadow: 0 4px 0 #9c1f1e, 0 8px 22px rgba(0, 0, 0, .45);
+}
+.btn-exit:active { transform: translateY(3px); box-shadow: 0 1px 0 #9c1f1e; }
+.btn-quit {
+  display: block;
+  margin: 12px auto 0;
+  background: rgba(8, 10, 22, .55);
+  color: #ffd9e2;
+  border: 1px solid rgba(255, 217, 226, .4);
+  font-size: 14px;
+  padding: 9px 22px;
+  border-radius: 10px;
+}
+.btn-quit:hover { color: #fff; border-color: #fff; }
+
+/* bouton quitter, visible en permanence pendant la partie (coin haut-droit) */
+.btn-quit-ingame {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  background: rgba(8, 10, 22, .55);
+  color: #ffd9e2;
+  border: 1px solid rgba(255, 217, 226, .4);
+  font-size: 13px;
+  padding: 7px 14px;
+  border-radius: 10px;
+}
+.btn-quit-ingame:hover { color: #fff; border-color: #fff; background: rgba(224, 49, 47, .7); }
+
+/* bouton couper/rétablir le son, en jeu (à gauche du bouton quitter) */
+.btn-mute {
+  position: absolute;
+  top: 10px;
+  right: 104px;
+  z-index: 5;
+  background: rgba(8, 10, 22, .55);
+  color: #eef0ff;
+  border: 1px solid rgba(238, 240, 255, .4);
+  font-size: 16px;
+  line-height: 1;
+  padding: 6px 11px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.btn-mute:hover { border-color: #fff; background: rgba(8, 10, 22, .8); }
+.btn-mute.muted { color: #ff9db0; border-color: rgba(255, 157, 176, .55); }
