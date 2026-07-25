@@ -19,6 +19,7 @@ import { selectMode, selectDifficulty, DIFFICULTIES } from './mode_select.js';
 import { globalElo, recentElo, record, recordSolo, soloHistory, history } from './skill_tracker.js';
 import { Hud } from './ui/hud.js';
 import { TeamIndicators } from './ui/team_indicators.js';
+import { createDebugHud } from '/shared/debug-hud.js';
 
 const ACTION = 'KeyF'; // pose et désamorçage
 
@@ -504,20 +505,10 @@ const indicators = new TeamIndicators(document.getElementById('hudRoot'),
 const clock = new THREE.Clock();
 let buyShownFor = -1;
 
-// --- FPS moteur : 1000 / temps moyen d'une frame complète (calcul + rendu),
-// non plafonné par le taux de rafraîchissement de l'écran (contrairement au
-// FPS que le navigateur afficherait). Juste le chiffre demandé, pas le HUD
-// partagé de Tag Arena/Mine Coop (qui ajoute FPS écran + ping, inutiles ici).
-const fpsEl = document.createElement('div');
-fpsEl.style.cssText = [
-  'position:fixed', 'top:8px', 'left:8px', 'z-index:1000',
-  'background:rgba(8,10,22,.75)', 'color:#9ef01a',
-  'font:12px/1.4 Consolas,Menlo,monospace', 'padding:4px 8px', 'border-radius:6px',
-  'pointer-events:none',
-].join(';');
-document.body.appendChild(fpsEl);
-const frameTimes = [];
-let fpsRefresh = 0;
+// HUD de debug partagé (Tag Arena/Mine Coop). Jeu entièrement local : pas de
+// socket, le ping affiche « — » en permanence, c'est attendu.
+const debugHud = createDebugHud(null);
+debugHud.show();
 
 // Contexte donné aux bots. Une fumée coupe leur vision : distance 2D du centre
 // de chaque zone au segment de visée, sous le rayon = bloqué.
@@ -685,16 +676,7 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
   renderMinimap();
 
-  // FPS moteur : moyenne glissante sur 40 frames, texte rafraîchi 3x/s (pas besoin
-  // de le réécrire à chaque frame, ce serait juste du travail DOM en plus).
-  frameTimes.push(performance.now() - workStart);
-  if (frameTimes.length > 40) frameTimes.shift();
-  fpsRefresh += dt;
-  if (fpsRefresh >= 0.3) {
-    fpsRefresh = 0;
-    const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
-    fpsEl.textContent = `FPS moteur ${Math.round(1000 / avg)}`;
-  }
+  debugHud.markFrame(performance.now() - workStart); // → FPS moteur (non plafonné)
 });
 
 // ?test : selftest de la logique pure + état exposé pour le smoke navigateur.

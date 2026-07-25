@@ -47,6 +47,8 @@ export class WeaponView {
     mag.position.set(0, -0.035 - mh / 2, -bl * 0.55);
 
     g.add(body, barrel, mag);
+    this.mag = mag;
+    this.magY = mag.position.y;
     this.parts = g;
     this.root.add(g);
   }
@@ -69,8 +71,17 @@ export class WeaponView {
     this.parts.position.z = k * 0.045;
     this.parts.rotation.x = k * 0.22;
 
-    // Rechargement : l'arme bascule hors du champ et revient.
+    // Rechargement : l'arme bascule hors du champ et revient, sur toute la durée
+    // propre à l'arme (reloadTotal) ; le chargeur tombe puis se replace au milieu.
     const r = arsenal.reloading;
-    this.parts.rotation.z = r > 0 ? Math.sin(Math.min(r, 1) * Math.PI) * 0.9 : 0;
+    if (r > 0) {
+      const p = 1 - r / (arsenal.reloadTotal || r); // 0 → 1 du début à la fin
+      this.parts.rotation.z = Math.sin(p * Math.PI) * 0.9;
+      const out = Math.sin(Math.PI * Math.min(Math.max((p - 0.15) / 0.7, 0), 1));
+      this.mag.position.y = this.magY - out * 0.1;
+    } else {
+      this.parts.rotation.z = 0;
+      this.mag.position.y = this.magY;
+    }
   }
 }

@@ -1,7 +1,7 @@
 // Vérification des collisions — la seule logique qui casse en silence.
 // Lancer avec index.html?test : résultat en console + pastille en haut à droite.
 import { surfaceY, groundHeight, blocked, Player } from './player.js';
-import { WEAPONS, Arsenal, damage, recoilAt, spreadOf } from './weapons.js';
+import { WEAPONS, CATS, Arsenal, damage, recoilAt, spreadOf } from './weapons.js';
 import { AGENTS, Loadout } from './abilities.js';
 import { Wallet, REWARD, roundReward } from './economy.js';
 import { Spike, PLANT_TIME, FUSE_TIME, DEFUSE_CHECKPOINT } from './spike.js';
@@ -335,8 +335,32 @@ ok(arsenal.recoil.y < 0.05, 'la caméra revient après le spray');
 
 arsenal.clip.mag = 0;
 arsenal.startReload();
+ok(arsenal.reloadTotal === CATS.rifle.reload, 'durée de rechargement de la famille par défaut');
 for (let i = 0; i < 200; i++) arsenal.update(1 / 60, gun, stub, hitApi);
 near(arsenal.clip.mag, WEAPONS.vandal.mag, 'rechargement complet');
+
+// Régression : le compteur restait négatif après un rechargement (truthy), ce qui
+// bloquait définitivement les suivants — flagrant sur les snipers à petit chargeur.
+ok(arsenal.reloading === 0, 'compteur de rechargement revenu exactement à 0');
+arsenal.clip.mag = 0;
+arsenal.startReload();
+ok(arsenal.reloading > 0, 'un 2e rechargement démarre');
+for (let i = 0; i < 200; i++) arsenal.update(1 / 60, gun, stub, hitApi);
+near(arsenal.clip.mag, WEAPONS.vandal.mag, '2e rechargement complet');
+
+// Durée propre à l'arme : le Marshal recharge plus vite que sa famille sniper.
+arsenal.slots[0] = 'marshal';
+arsenal.reset('marshal');
+arsenal.index = -1;
+arsenal.equip(0);
+arsenal.clip.mag = 0;
+arsenal.startReload();
+near(arsenal.reloading, WEAPONS.marshal.reload, 'Marshal : durée spécifique (2.5 s)');
+ok(WEAPONS.marshal.reload < CATS.sniper.reload, 'plus court que la famille (3.7 s)');
+arsenal.slots[0] = 'vandal';
+arsenal.reset('vandal');
+arsenal.index = -1;
+arsenal.equip(0);
 
 // Classic en semi-auto : maintenir la gâchette ne doit tirer qu'une fois.
 arsenal.equip(1);
@@ -384,7 +408,10 @@ const pad = {
 const calls = [];
 const noTarget = new Set(['heal', 'revive', 'rotate']);
 const fakeCtx = new Proxy({}, {
-  get: (_, name) => () => { calls.push(name); return noTarget.has(name) ? false : undefined; },
+  // onCast est un hook optionnel (relais réseau), pas un effet de capacité :
+  // undefined => `ctx.onCast?.()` reste sans effet, comme en jeu local.
+  get: (_, name) => (name === 'onCast' ? undefined
+    : () => { calls.push(name); return noTarget.has(name) ? false : undefined; }),
 });
 const tick = (l) => l.update(1 / 60, pad, fakeCtx);
 

@@ -63,7 +63,8 @@ export const WEAPONS = {
   vandal:   { name: 'Vandal',   class: 'rifle',   cat: 'rifle',   price: 2900, d: D(160, 40, 34),  fps: 9.75, mag: 25, pen: 'med', drift: 1, auto: true },
 
   // --- Snipers ---
-  marshal:  { name: 'Marshal',  class: 'sniper',  cat: 'sniper',  price: 950,  d: D(202, 101, 85),  fps: 1.5,  mag: 5, pen: 'high', zoom: 2.5 },
+  // `reload` sur l'arme : durée propre, sinon celle de la famille (CATS).
+  marshal:  { name: 'Marshal',  class: 'sniper',  cat: 'sniper',  price: 950,  d: D(202, 101, 85),  fps: 1.5,  mag: 5, pen: 'high', zoom: 2.5, reload: 2.5 },
   outlaw:   { name: 'Outlaw',   class: 'sniper',  cat: 'sniper',  price: 2400, d: D(238, 140, 119), fps: 2.75, mag: 2, pen: 'high', zoom: 2.5 },
   operator: { name: 'Operator', class: 'sniper',  cat: 'sniper',  price: 4700, d: D(255, 150, 120), fps: 0.75, mag: 5, pen: 'high', zoom: 4, settle: 1.1 },
 
@@ -148,6 +149,7 @@ export class Arsenal {
     this.shots = 0;        // compteur de spray, remis à zéro entre deux rafales
     this.cooldown = 0;
     this.reloading = 0;
+    this.reloadTotal = 0;
     this.settling = 0;     // sniper : temps restant avant de pouvoir réviser
     this.burst = 0;
     this.ads = false;
@@ -162,7 +164,8 @@ export class Arsenal {
   startReload() {
     const a = this.clip;
     if (this.reloading || a.mag >= this.w.mag || a.reserve <= 0) return;
-    this.reloading = CATS[this.w.cat].reload;
+    this.reloading = this.reloadTotal = this.w.reload ?? CATS[this.w.cat].reload;
+    this.burst = 0; // une rafale entamée ne doit pas repartir seule après le rechargement
   }
 
   // api : { trace(spreadDeg, pellets) -> [hit], onHit(hit, dmg), onShot(w) }
@@ -179,6 +182,7 @@ export class Arsenal {
     if (this.reloading > 0) {
       this.reloading -= dt * (player.buff ?? 1); // Stim Beacon : rechargement plus rapide
       if (this.reloading <= 0) {
+        this.reloading = 0; // pas de reliquat négatif : truthy, il bloquerait startReload
         const a = this.clip, need = w.mag - a.mag;
         const take = Math.min(need, a.reserve);
         a.mag += take;
