@@ -4,9 +4,13 @@
 // La difficulté manuelle n'existe QUE pour le 1v3 : le 3v3 garde son
 // matchmaking par ELO global (skill_tracker.js), intouché.
 //
-// Mode test : `?mode=1v3&diff=hard` saute directement au choix voulu, comme
-// `?test` raccourcit déjà la recherche de partie. Un `?test` sans `mode`
-// vaut 3v3 — c'est ce qui laisse les tests existants inchangés.
+// Modes : '3v3' = EN LIGNE (serveur autoritaire, vrais joueurs + bots) ;
+// '1v3' = défi solo local ; '3v3-local' = 3v3 contre bots 100 % local, réservé
+// aux tests (le moteur local sert aussi au 1v3).
+//
+// Mode test : `?mode=1v3&diff=hard` saute directement au choix voulu. Un `?test`
+// sans `mode` vaut '3v3-local' — c'est ce qui laisse le smoke navigateur (qui
+// joue une partie locale) inchangé, sans dépendre d'un serveur.
 import { soloWins } from './skill_tracker.js';
 
 // ELO injecté dans botParams() à la place de globalElo(). 1600 est le plafond
@@ -60,10 +64,10 @@ function chooser(title, items) {
 }
 
 export function selectMode() {
-  const forced = params.get('mode') ?? (testing ? '3v3' : null);
-  if (forced === '3v3' || forced === '1v3') return Promise.resolve(forced);
+  const forced = params.get('mode') ?? (testing ? '3v3-local' : null);
+  if (forced === '3v3' || forced === '3v3-local' || forced === '1v3') return Promise.resolve(forced);
   return chooser('CHOISIS TON MODE', [
-    { key: '3v3', name: '3v3 classique', tag: 'matchmaking à ton niveau, 2 alliés bots' },
+    { key: '3v3', name: '3v3 en ligne', tag: 'vrais joueurs, places libres comblées par des bots' },
     { key: '1v3', name: '1v3 — défi solo', tag: 'seul contre 3, difficulté au choix' },
   ]);
 }

@@ -20,6 +20,7 @@ import { globalElo, recentElo, record, recordSolo, soloHistory, history } from '
 import { Hud } from './ui/hud.js';
 import { TeamIndicators } from './ui/team_indicators.js';
 import { createDebugHud } from '/shared/debug-hud.js';
+import { joinOnlineMatch } from './network/net_client.js';
 
 const ACTION = 'KeyF'; // pose et désamorçage
 
@@ -28,16 +29,25 @@ const H_FOV = 103;
 
 const overlay = document.getElementById('overlay');
 overlay.style.display = 'none';
-const mode = await selectMode();
+const mode = await selectMode();          // '3v3' (en ligne) | '3v3-local' (tests) | '1v3'
+const online = mode === '3v3';
 const difficulty = mode === '1v3' ? await selectDifficulty() : null;
-const mapId = await selectMap();
+// En ligne, c'est le serveur qui choisit la map ; on ne montre pas l'écran de map.
+let mapId = online ? null : await selectMap();
 const agentKey = await selectAgent();
 
-// 1v3 : personne à chercher, donc pas d'écran de recherche — on construit le
-// lobby directement. La difficulté choisie remplace l'ELO moyen pour les bots.
-// 3v3 : matchmaking et niveau moyen global inchangés.
-let lobby, botElo;
-if (mode === '1v3') {
+// Trois façons de constituer le lobby selon le mode :
+//  - en ligne : matchmaking serveur (quickplay) → roster + map reçus à game:start ;
+//  - 1v3 : joueur seul contre 3 bots, difficulté choisie, 100 % local ;
+//  - 3v3-local : matchmaking cosmétique + bots locaux (comme avant, pour les tests).
+let lobby, botElo = 0, net = null;
+if (online) {
+  net = await joinOnlineMatch({ name: 'Vous', agentKey, onWait: showWait });
+  clearWait();
+  mapId = net.mapId;
+  const me = net.roster.find((r) => r.id === net.selfId);
+  lobby = { playerTeam: me?.team ?? 0, teams: [], online: true };
+} else if (mode === '1v3') {
   const teams = assignTeams([{ id: 'you', elo: 0 }], [1, 3]);
   lobby = { playerTeam: teams.findIndex((t) => t.humans.some((h) => h.id === 'you')), teams };
   botElo = DIFFICULTIES[difficulty].elo;
@@ -50,6 +60,24 @@ if (mode === '1v3') {
   });
 }
 overlay.style.display = 'grid';
+
+// Écran d'attente de la file d'attente en ligne (avant que la partie démarre).
+function showWait({ left }) {
+  let el = document.getElementById('valWait');
+  if (!el) {
+    document.head.insertAdjacentHTML('beforeend',
+      `<style>#valWait{position:fixed;inset:0;z-index:5;display:grid;place-content:center;gap:10px;
+        text-align:center;background:#0d1117;font:13px/1.6 ui-monospace,Consolas,monospace;color:#cfe3ee}
+        #valWait h1{margin:0;font-size:18px;letter-spacing:.2em;color:#4ee1e8;font-weight:600}
+        #valWait .t{font-size:26px;color:#ffc44d}</style>`);
+    document.body.insertAdjacentHTML('beforeend',
+      `<div id="valWait"><h1>RECHERCHE DE JOUEURS…</h1><div class="t"></div>
+       <p>les places libres seront comblées par des bots</p></div>`);
+    el = document.getElementById('valWait');
+  }
+  el.querySelector('.t').textContent = `${Math.max(0, Math.ceil(left))} s`;
+}
+function clearWait() { document.getElementById('valWait')?.remove(); }
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -79,32 +107,52 @@ const loadout = new Loadout(agentKey, STARTING_ULT_POINTS);
 
 const playerActor = {
   name: 'Vous', agentName: AGENTS[agentKey].name, team: lobby.playerTeam,
+  id: online ? net.selfId : 'you',
   pos: player.pos, hp: 100, maxHp: 100, shield: 0,
   alive: true, wallet: new Wallet(), kills: 0, matchKills: 0, matchDeaths: 0, player, loadout,
 };
 const actors = [playerActor];
 const bots = [];
 
-// Les places restantes du 3v3 sont des bots, tous au niveau moyen global (spec).
-const pool = AGENT_KEYS.filter((k) => k !== agentKey);
-let nextAgent = 0;
-for (let team = 0; team < 2; team++) {
-  for (let i = 0; i < lobby.teams[team].bots; i++) {
-    const key = pool[nextAgent++ % pool.length];
-    const model = createCharacterModel(AGENTS[key].color);
+if (online) {
+  // Les autres acteurs (humains + bots) sont pilotés par les snapshots serveur :
+  // aucun BotController local, juste un modèle déplacé par interpolation.
+  for (const r of net.roster) {
+    if (r.id === net.selfId) continue;
+    const model = createCharacterModel(AGENTS[r.agentKey]?.color ?? 0x8899aa);
     model.userData.head.userData.part = 'h';
     model.userData.body.userData.part = 'b';
     scene.add(model);
-    // Deux bots peuvent jouer le même agent : on numérote pour le killfeed/scoreboard.
-    const dupes = actors.filter((a) => a.agentName === AGENTS[key].name).length;
     const actor = {
-      name: AGENTS[key].name + (dupes ? ` ${dupes + 1}` : ''), agentName: AGENTS[key].name,
-      team, pos: model.position, hp: 100, maxHp: 100, shield: 0,
+      name: r.name, agentName: AGENTS[r.agentKey]?.name ?? r.name, team: r.team, id: r.id,
+      pos: model.position, hp: 100, maxHp: 100, shield: 0,
       alive: true, wallet: new Wallet(), kills: 0, model,
     };
     model.userData.actor = actor;
     actors.push(actor);
-    bots.push(new BotController(actor, botElo, map.nav));
+  }
+} else {
+  // 3v3 local / 1v3 : les places restantes sont des bots, au niveau demandé.
+  const pool = AGENT_KEYS.filter((k) => k !== agentKey);
+  let nextAgent = 0;
+  for (let team = 0; team < 2; team++) {
+    for (let i = 0; i < lobby.teams[team].bots; i++) {
+      const key = pool[nextAgent++ % pool.length];
+      const model = createCharacterModel(AGENTS[key].color);
+      model.userData.head.userData.part = 'h';
+      model.userData.body.userData.part = 'b';
+      scene.add(model);
+      // Deux bots peuvent jouer le même agent : on numérote pour le killfeed/scoreboard.
+      const dupes = actors.filter((a) => a.agentName === AGENTS[key].name).length;
+      const actor = {
+        name: AGENTS[key].name + (dupes ? ` ${dupes + 1}` : ''), agentName: AGENTS[key].name,
+        team, pos: model.position, hp: 100, maxHp: 100, shield: 0,
+        alive: true, wallet: new Wallet(), kills: 0, model,
+      };
+      model.userData.actor = actor;
+      actors.push(actor);
+      bots.push(new BotController(actor, botElo, map.nav));
+    }
   }
 }
 
@@ -230,6 +278,11 @@ function addTracer(from, to) {
   effects.fade(line, 0.06, () => { scene.remove(line); geo.dispose(); });
 }
 
+// En ligne : le tir est reporté au serveur (autoritaire sur les dégâts) au lieu
+// d'être appliqué localement. On mémorise les impacts et le fait d'avoir tiré.
+let pendingHits = [];
+let firedShot = false;
+
 const api = {
   trace(w, deg) {
     const hits = [];
@@ -244,6 +297,7 @@ const api = {
     }
     return hits;
   },
+  onShot() { firedShot = true; }, // en ligne : relaie le tir (tracer chez les autres)
   onHit(hit, dmg, grouped) {
     crosshair.hit();
 
@@ -256,6 +310,12 @@ const api = {
 
     const t = hit.target;
     if (!t || !t.alive || t.team === playerActor.team) return; // pas de tir allié
+
+    // En ligne : on ne touche pas aux PV localement — le serveur tranche et diffuse.
+    if (online) {
+      pendingHits.push({ targetId: t.id, part: hit.part, dist: hit.dist, penMult: hit.penMult ?? 1 });
+      return;
+    }
 
     effects.hurt(t, dmg, playerActor, arsenal.w.name);
 
@@ -283,6 +343,16 @@ const effects = new Effects({
 });
 const ctx = effects.ctx();
 
+// En ligne : on relaie chaque lancer de capacité au serveur. v1 — les fumées et
+// soins ont un effet partagé (vision des bots, soin) ; les autres capacités sont
+// diffusées pour un rendu générique. Position approchée = position du lanceur.
+// ponytail: parité visuelle complète des 16 capacités = incrément ultérieur.
+if (online) ctx.onCast = (ability) => {
+  const n = ability.name;
+  const kind = /smoke|cloudburst/i.test(n) ? 'smoke' : /heal/i.test(n) ? 'heal' : 'ability';
+  net.sendAbility({ kind, name: n, pos: { x: player.pos.x, y: player.pos.y, z: player.pos.z } });
+};
+
 const aliveCount = (team) => actors.filter((a) => a.team === team && a.alive).length;
 
 const rm = new RoundManager({
@@ -301,6 +371,11 @@ const rm = new RoundManager({
 
 const buy = new BuyMenu({
   input, canvas: renderer.domElement, wallet: playerActor.wallet, arsenal, loadout, actor: playerActor,
+  // En ligne : l'économie est autoritaire côté serveur (val:buy) et le joueur se
+  // déclare prêt via le réseau (val:ready). Le portefeuille local est réaligné sur
+  // les crédits du snapshot à chaque frame (applyNet).
+  onBuy: online ? (d) => net.sendBuy(d) : null,
+  onReady: online ? () => net.sendReady() : null,
 });
 
 view.setWeapon(arsenal.w);
@@ -415,7 +490,8 @@ function tickTeleports() {
 }
 
 function explode() {
-  for (const a of actors) {
+  // En ligne, le serveur a déjà tué les acteurs dans le rayon : ici, seulement le visuel.
+  if (!online) for (const a of actors) {
     if (a.alive && Math.hypot(a.pos.x - spike.pos.x, a.pos.z - spike.pos.z) < BLAST_RADIUS) kill(a, null, 'Spike');
   }
   const boom = new THREE.Mesh(new THREE.SphereGeometry(BLAST_RADIUS, 20, 12),
@@ -534,9 +610,73 @@ const botCtx = {
   tracer: (a, b) => addTracer(eye(a), eye(b)),
 };
 
+// --- Synchronisation réseau (mode en ligne uniquement) ---------------------------
+let netAcc = 0;    // accumulateur pour cadencer l'envoi de l'input (~30 Hz)
+let lastRound = 0; // détecte le changement de round pour réaligner le joueur au spawn
+
+// Applique le dernier snapshot serveur : état de round et de spike (miroir pour le
+// HUD) + les autres acteurs (position interpolée, PV, vie). Le joueur local garde
+// son mouvement prédit ; seuls son état vital et son économie viennent du serveur.
+function applyNet() {
+  const snap = net.snap;
+  if (!snap) return;
+  rm.phase = snap.phase; rm.timer = snap.timer; rm.round = snap.round;
+  rm.score = snap.score; rm.attackers = snap.attackers;
+
+  const sp = snap.spike;
+  spike.state = sp.state; spike.fuse = sp.fuse; spike.plant = sp.plant; spike.defuse = sp.defuse;
+  spike.pos = sp.x != null ? { x: sp.x, y: sp.y, z: sp.z } : null;
+
+  const interp = net.sample();
+  const byId = new Map(snap.actors.map((a) => [a.id, a]));
+
+  // Nouveau round : le serveur a replacé le joueur à son spawn — on s'y aligne une
+  // fois (sinon l'input local le ramènerait aussitôt à son ancienne position).
+  const self = byId.get(playerActor.id);
+  if (self && snap.round !== lastRound) {
+    lastRound = snap.round;
+    Object.assign(player.pos, { x: self.x, y: self.y, z: self.z });
+    player.vel.x = player.vel.y = player.vel.z = 0;
+  }
+  if (self) {
+    playerActor.hp = self.hp; playerActor.shield = self.shield; playerActor.alive = self.alive;
+    if (self.credits != null) playerActor.wallet.credits = self.credits;
+  }
+
+  for (const a of actors) {
+    if (a === playerActor) continue;
+    const raw = byId.get(a.id);
+    if (!raw) continue;
+    a.hp = raw.hp; a.shield = raw.shield; a.team = raw.team; a.role = raw.role; a.alive = raw.alive;
+    const ip = interp.get(a.id);
+    if (ip && a.model) { a.model.position.set(ip.x, ip.y, ip.z); a.model.rotation.y = ip.yaw; }
+    if (a.model) a.model.visible = a.alive;
+  }
+}
+
+if (online) {
+  net.on('fx', (d) => {
+    if (d.kind === 'tracer' && d.from && d.to) {
+      addTracer(new THREE.Vector3(d.from.x, d.from.y, d.from.z), new THREE.Vector3(d.to.x, d.to.y, d.to.z));
+    } else if (d.kind === 'smoke') {
+      effects.zone({ x: d.x, y: d.y, z: d.z }, { kind: 'smoke', radius: d.radius ?? 4, life: 15 });
+    }
+    // 'explode' : rien à faire ici, le miroir de spike (state 'exploded') déclenche
+    // le visuel via explode(). 'teleport'/'heal'/'ability' : cosmétique, ignoré en v1.
+  });
+  net.on('kill', (d) => {
+    const by = actors.find((a) => a.id === d.byId) ?? null;
+    const t = actors.find((a) => a.id === d.targetId);
+    if (t) hud.feed.add(by, t, d.via);
+  });
+  net.on('end', (d) => { rm.phase = 'match'; rm.winner = d.winner; }); // écran de fin via le HUD
+}
+
 renderer.setAnimationLoop(() => {
   const workStart = performance.now(); // pour le FPS moteur, mesuré en fin de frame
   const dt = Math.min(clock.getDelta(), 0.05); // évite de traverser un mur après un changement d'onglet
+
+  if (online) applyNet(); // aligne round/spike/acteurs sur le dernier snapshot serveur
 
   const wasAlive = playerActor.alive;
   const attacking = playerActor.team === rm.attackers;
@@ -545,7 +685,7 @@ renderer.setAnimationLoop(() => {
   const carrier = actors.find((a) => a.team === rm.attackers && a.alive && a.player)
     ?? actors.find((a) => a.team === rm.attackers && a.alive);
 
-  rm.update(dt);
+  if (!online) rm.update(dt); // en ligne, RoundManager tourne côté serveur (miroir via applyNet)
   // Le menu s'ouvre une fois par round : PRÊT le referme sans qu'il revienne.
   // Les bots achètent au même moment, selon leur ELO et leurs crédits.
   if (rm.phase === 'buy' && buyShownFor !== rm.round) {
@@ -576,8 +716,9 @@ renderer.setAnimationLoop(() => {
   else if (playerActor.alive) player.update(dt, input, solids, camera);
   else spectate();
 
-  // --- Pose / désamorçage ---
-  if (rm.live && playerActor.alive && !effects.drone) {
+  // --- Pose / désamorçage --- (en ligne : géré côté serveur, l'état de holding
+  // part dans val:input ; on ne touche pas au spike localement)
+  if (!online && rm.live && playerActor.alive && !effects.drone) {
     const holding = input.down(ACTION);
     if (attacking && carrier === playerActor && spike.state === 'carried') {
       const site = siteAt(sites, player.pos);
@@ -594,15 +735,17 @@ renderer.setAnimationLoop(() => {
     }
   }
 
-  // --- Bots ---
-  if (rm.live) {
+  // --- Bots --- (locaux uniquement ; en ligne, les bots vivent sur le serveur)
+  if (!online && rm.live) {
     const ctx2 = { ...botCtx, attackers: rm.attackers, carrier, plan: botPlan };
     for (const b of bots) b.update(dt, ctx2);
   }
 
   // Fin de match : une seule écriture, dans l'historique du mode joué. Les deux
   // branches sont exclusives — le 1v3 ne doit jamais peser sur l'ELO global.
-  if (rm.phase === 'match' && !matchRecorded) {
+  // En ligne : l'historique ELO local n'est pas alimenté (le serveur ne tient pas
+  // d'ELO ; le résultat arrive via game:end). ponytail: stats en ligne = v2.
+  if (!online && rm.phase === 'match' && !matchRecorded) {
     matchRecorded = true;
     const stats = {
       won: rm.winner === playerActor.team,
@@ -617,7 +760,7 @@ renderer.setAnimationLoop(() => {
     });
   }
 
-  tickTeleports();
+  if (!online) tickTeleports(); // en ligne, les téléporteurs sont autoritaires côté serveur
 
   // --- Spike : visuel, bips, explosion ---
   spikeMesh.visible = spike.planted;
@@ -641,6 +784,30 @@ renderer.setAnimationLoop(() => {
   arsenal.locked = buy.open || rm.phase === 'buy' || !playerActor.alive
     || loadout.equipped >= 0 || !!effects.drone;
   arsenal.update(dt, input, player, api);
+
+  // --- Envois réseau (en ligne) ---
+  if (online) {
+    // Tir : reporté au serveur (from/to = tracé, hits détectés par le raycast local).
+    if (firedShot) {
+      net.sendShot({
+        from: { x: muzzle.x, y: muzzle.y, z: muzzle.z },
+        to: { x: shotEnd.x, y: shotEnd.y, z: shotEnd.z },
+        hits: pendingHits,
+      });
+    }
+    firedShot = false;
+    pendingHits = [];
+    // Position/orientation + touche d'action, ~30 Hz.
+    netAcc += dt;
+    if (netAcc >= 0.033) {
+      netAcc = 0;
+      net.sendInput({
+        x: player.pos.x, y: player.pos.y, z: player.pos.z,
+        yaw: player.yaw, holding: input.down(ACTION),
+      });
+    }
+  }
+
   if (arsenal.key !== key) view.setWeapon(arsenal.w);
   view.update(dt, arsenal, player.speed);
   crosshair.update(dt, arsenal.ads ? 0 : arsenal.spread);
@@ -686,6 +853,7 @@ if (location.search.includes('test')) {
   Object.assign(window, {
     input, loadout, effects, player, camera, arsenal, actors, playerActor, rm, spike, buy,
     map, minimap, bots, hud, indicators, mode, difficulty, botElo, ROUNDS_TO_WIN,
+    online, net, // exposés pour le smoke réseau
     stats: { solo: soloHistory, global: history },
   });
   import('./selftest.js');

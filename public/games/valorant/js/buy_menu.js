@@ -64,6 +64,7 @@ export class BuyMenu {
   // pour autant — RoundManager attend que TOUT le monde soit prêt (ou le timer).
   close() {
     this.d.actor.ready = true;
+    this.d.onReady?.(); // en ligne : déclare le joueur prêt côté serveur
     this.hide();
     Promise.resolve(this.d.canvas.requestPointerLock()).catch(() => {});
   }
@@ -89,6 +90,7 @@ export class BuyMenu {
     arsenal.reset(key);
     arsenal.index = -1;
     arsenal.equip(slot);
+    this.d.onBuy?.({ weapon: key }); // en ligne : le serveur tient l'économie autoritaire
   }
 
   buyShield(key) {
@@ -97,6 +99,7 @@ export class BuyMenu {
     if ((a.shield ?? 0) >= s.hp || !this.d.wallet.spend(s.price)) return;
     a.shield = s.hp;
     a.shieldMax = s.hp;
+    this.d.onBuy?.({ shield: key });
   }
 
   render() {

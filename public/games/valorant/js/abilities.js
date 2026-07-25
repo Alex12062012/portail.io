@@ -168,7 +168,12 @@ export class Loadout {
   fire(ctx, alt) {
     const i = this.equipped;
     const s = this.state[i];
-    if (this.agent.abilities[i].cast(ctx, alt) === false) return; // reste équipée
+    const ability = this.agent.abilities[i];
+    const stay = ability.cast(ctx, alt) === false;
+    // Hook optionnel : en ligne, main.js s'en sert pour relayer le lancer au
+    // serveur (val:ability). Non défini en local → aucun effet.
+    ctx.onCast?.(ability, alt);
+    if (stay) return; // reste équipée (rotation du mur, fumée suivante)
     if (--s.shots > 0) return;
     this.spend(i);
   }

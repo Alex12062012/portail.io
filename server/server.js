@@ -14,6 +14,7 @@ import { Server } from 'socket.io';
 import { RoomManager } from './rooms.js';
 import { createTagGame } from './games/tag-arena.js';
 import { createMineGame } from './games/mine-coop.js';
+import { createValorantGame } from './games/valorant.js';
 import { TAG } from '../shared/tag-map.js';
 import { loadSaveIfExists, listSaves, randomSeed } from './mine-save.js';
 
@@ -35,6 +36,11 @@ const GAMES = {
     minPlayers: 1, // un monde solo doit pouvoir démarrer
     maxPlayers: 4,
     create: (io, room, opts) => createMineGame(io, room, opts)
+  },
+  'valorant': {
+    minPlayers: 1, // un joueur seul démarre, les places libres sont comblées par des bots
+    maxPlayers: 6, // 3v3
+    create: (io, room, opts) => createValorantGame(io, room, opts)
   }
 };
 
@@ -68,8 +74,14 @@ function startGame(room, gameOpts = {}) {
       ? Number(process.env.TAG_START_DELAY)
       : 7;
   }
+  if (room.gameType === 'valorant') {
+    opts.onEnd = onRoundEnd; // partie publique terminée → statut 'ended' + ménage
+    if (process.env.VAL_WAIT_SECONDS !== undefined) opts.waitSeconds = Number(process.env.VAL_WAIT_SECONDS);
+  }
   room.game = def.create(io, room, opts);
-  for (const p of room.players.values()) room.game.addHuman(p.id, p.name);
+  // p.agentKey n'existe que pour valorant (posé au quickplay) ; undefined ailleurs,
+  // ce que les addHuman de tag/mine ignorent (paramètre d'options par défaut).
+  for (const p of room.players.values()) room.game.addHuman(p.id, p.name, p.agentKey);
   room.game.start(); // met room.status = 'playing' et émet game:start
   broadcastRoom(room);
 }
@@ -95,6 +107,9 @@ function leaveCurrent(socket) {
     if (room.gameType === 'mine-coop') {
       room.game.removeHuman(socket.id); // sauvegarde l'inventaire du partant
       if (removedRoom) room.game.save(); // dernier joueur parti → persiste le monde
+    } else if (room.gameType === 'valorant') {
+      // Déco en cours de match : un bot reprend la place, la partie continue.
+      room.game.removeHuman(socket.id);
     } else {
       const wasAlive = room.game.removeHuman(socket.id);
       if (!room.isPublic && room.players.size < GAMES[room.gameType].minPlayers) {
@@ -184,17 +199,33 @@ io.on('connection', socket => {
       (r.game.joinableWaiting() || r.game.joinable()));
     if (room) {
       rooms.addPlayer(room, socket, name);
-      if (room.game.joinableWaiting()) {
-        // encore dans le temps d'attente : on prend une place libre
-        room.game.addHuman(socket.id, name, { joinImmunity: true });
+      if (room.gameType === 'valorant') {
+        // Valorant : l'agent choisi voyage avec le joueur. Pendant la file, on
+        // prend une place libre sans game:start (le jeu enverra val:wait puis
+        // game:start à `begin`) ; sinon on remplace un bot dans la manche en cours.
+        room.players.get(socket.id).agentKey = payload.agentKey;
+        if (room.game.joinableWaiting()) {
+          room.game.addHuman(socket.id, name, payload.agentKey);
+          broadcastRoom(room);
+        } else {
+          room.game.replaceBotWithHuman(socket.id, name, payload.agentKey);
+          broadcastRoom(room);
+          socket.emit('game:start', room.game.startPayload());
+        }
       } else {
-        room.game.replaceBotWithHuman(socket.id, name);
+        if (room.game.joinableWaiting()) {
+          // encore dans le temps d'attente : on prend une place libre
+          room.game.addHuman(socket.id, name, { joinImmunity: true });
+        } else {
+          room.game.replaceBotWithHuman(socket.id, name);
+        }
+        broadcastRoom(room);
+        socket.emit('game:start', room.game.startPayload());
       }
-      broadcastRoom(room);
-      socket.emit('game:start', room.game.startPayload());
     } else {
       room = rooms.create(payload.gameType, { isPublic: true });
       rooms.addPlayer(room, socket, name);
+      if (payload.gameType === 'valorant') room.players.get(socket.id).agentKey = payload.agentKey;
       startGame(room);
     }
     ack({ ok: true, code: room.code });
@@ -232,6 +263,19 @@ io.on('connection', socket => {
   routeMine('mine:statInc', 'handleStatInc');
   routeMine('mine:save', 'handleSave');
   routeMine('mine:statsRequest', 'handleStatsRequest');
+
+  // événements du jeu Valorant, routés vers l'instance du salon (même garde)
+  const routeVal = (ev, method) => socket.on(ev, data => {
+    const room = rooms.roomOf(socket.id);
+    if (room?.game && room.status === 'playing' && room.gameType === 'valorant') {
+      room.game[method](socket.id, data);
+    }
+  });
+  routeVal('val:input', 'handleInput');   // position/orientation + touche d'action (pose/défuse)
+  routeVal('val:shot', 'handleShot');     // tir reporté (le client a fait le raycast)
+  routeVal('val:ability', 'handleAbility');
+  routeVal('val:buy', 'handleBuy');
+  routeVal('val:ready', 'handleReady');
 
   // changement de code du monde : a besoin d'un callback + accès au gestionnaire de salons
   socket.on('mine:setCode', (data, cb) => {
