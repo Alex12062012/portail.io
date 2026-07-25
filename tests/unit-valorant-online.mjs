@@ -81,4 +81,14 @@ ok(snap.actors.every((a) => typeof a.x === 'number' && typeof a.hp === 'number')
 ok(snap.actors.find((a) => a.id === you.id).credits !== undefined, 'crédits exposés pour l’humain');
 ok(snap.actors.find((a) => a.bot).credits === undefined, 'crédits masqués pour les bots');
 
+// Le client ne calcule rien en ligne : sans ces champs la bannière de fin de round
+// affichait « ROUND PERDU » même en gagnant, et le scoreboard restait à 0 kill.
+ok(snap.roundWinner === rm.roundWinner, `snapshot : vainqueur du round (${snap.roundWinner})`);
+ok(typeof snap.reason === 'string' && snap.reason.length > 0, `snapshot : motif de fin (« ${snap.reason} »)`);
+ok(snap.actors.every((a) => typeof a.kills === 'number' && typeof a.deaths === 'number'),
+   'snapshot : kills et morts du match exposés pour chaque acteur');
+ok(snap.actors.find((a) => a.id === you.id).kills === you.matchKills && you.matchKills > 0,
+   `snapshot : les kills de l’humain remontent (${snap.actors.find((a) => a.id === you.id).kills})`);
+ok(snap.actors.filter((a) => a.deaths > 0).length === 3, 'snapshot : les 3 défenseurs comptent une mort');
+
 console.log(`unit-valorant-online : ${n} assertions OK`);

@@ -3,6 +3,8 @@
   --cyan: #4ee1e8;
   --ally: #35e0c0;
   --enemy: #ff4d4d;
+  --team0: #4aa3ff; /* équipe bleue */
+  --team1: #ff4d4d; /* équipe rouge */
   --gold: #ffc44d;
   --panel: rgba(8, 12, 16, 0.62);
   --edge: #263039;
@@ -83,16 +85,21 @@
   left: -13px; top: -128px; width: 26px; height: 7px; opacity: .8;
   background: linear-gradient(to bottom, var(--gold), rgba(255, 196, 77, 0)); }
 
-/* --- Bannière ATTAQUE / DÉFENSE en début de round --- */
-#roundflash { position: absolute; left: 50%; top: 34%; transform: translateX(-50%);
-  font-size: 46px; font-weight: 700; letter-spacing: .34em; white-space: nowrap;
-  opacity: 0; text-shadow: 0 3px 20px #000; }
-#roundflash.atk { color: var(--enemy); animation: flash 2s ease-out; }
-#roundflash.def { color: var(--ally); animation: flash 2s ease-out; }
+/* --- Annonce ATTAQUE / DÉFENSE en début de round ---
+   Plein écran centré, ~22 % de la hauteur (borné par 12vw pour que « DÉFENSE »
+   tienne en largeur sur un écran étroit). Blanc + contour et ombre noirs : lisible
+   au-dessus de n'importe quel décor de map. Exactement 2 s, puis plus rien. */
+#roundflash { position: absolute; inset: 0; display: grid; place-content: center;
+  font-size: min(22vh, 12vw); font-weight: 700; letter-spacing: .06em;
+  white-space: nowrap; text-align: center; color: #fff; opacity: 0;
+  text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000,
+               0 0 18px rgba(0, 0, 0, .95), 0 8px 30px rgba(0, 0, 0, .9); }
+/* `both` : l'annonce reste à opacity 0 après coup au lieu de revenir à l'état de base. */
+#roundflash.atk, #roundflash.def { animation: flash 2s ease-out both; }
 @keyframes flash {
-  0% { opacity: 0; letter-spacing: .5em; }
-  15% { opacity: 1; letter-spacing: .34em; }
-  70% { opacity: 1; }
+  0% { opacity: 0; transform: scale(1.14); }
+  8% { opacity: 1; transform: scale(1); }
+  78% { opacity: 1; }
   100% { opacity: 0; }
 }
 
@@ -116,8 +123,10 @@
 #board td { padding: 6px 14px; background: var(--panel); border-top: 1px solid var(--edge); }
 #board tr.me td { border-left: 2px solid var(--cyan); }
 #board tr.dead td { opacity: .4; }
-#board .t0 td:first-child { color: var(--ally); }
-#board .t1 td:first-child { color: var(--enemy); }
+/* Le pseudo prend la couleur de SON équipe (bleu / rouge), pas celle de son camp
+   relatif au joueur : les deux moitiés du tableau restent identifiables d'un coup d'œil. */
+#board td.nm.b0 { color: var(--team0); font-weight: 700; }
+#board td.nm.b1 { color: var(--team1); font-weight: 700; }
 #board .gap td { background: none; border: 0; padding: 5px; }
 
 /* --- Étiquettes au-dessus des têtes --- */

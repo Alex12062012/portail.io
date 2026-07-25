@@ -644,6 +644,9 @@ function applyNet() {
   if (!snap) return;
   rm.phase = snap.phase; rm.timer = snap.timer; rm.round = snap.round;
   rm.score = snap.score; rm.attackers = snap.attackers;
+  // En ligne, RoundManager tourne côté serveur : sans ces deux champs le HUD n'a
+  // aucun moyen de savoir qui a gagné le round et affichait « ROUND PERDU » à vie.
+  rm.roundWinner = snap.roundWinner; rm.reason = snap.reason ?? '';
 
   const sp = snap.spike;
   spike.state = sp.state; spike.fuse = sp.fuse; spike.plant = sp.plant; spike.defuse = sp.defuse;
@@ -664,6 +667,10 @@ function applyNet() {
     playerActor.hp = self.hp; playerActor.shield = self.shield; playerActor.alive = self.alive;
     if (self.credits != null) playerActor.wallet.credits = self.credits;
     playerActor.points = self.points ?? playerActor.points;
+    // Les kills sont comptés par le serveur (dégâts autoritaires) : kill() local
+    // n'est jamais appelé en ligne, seul le killfeed l'est via l'event 'kill'.
+    playerActor.matchKills = self.kills ?? playerActor.matchKills;
+    playerActor.matchDeaths = self.deaths ?? playerActor.matchDeaths;
   }
 
   for (const a of actors) {
@@ -672,6 +679,8 @@ function applyNet() {
     if (!raw) continue;
     a.hp = raw.hp; a.shield = raw.shield; a.team = raw.team; a.role = raw.role; a.alive = raw.alive;
     a.points = raw.points ?? a.points;
+    a.matchKills = raw.kills ?? a.matchKills;
+    a.matchDeaths = raw.deaths ?? a.matchDeaths;
     // Nom/flag bot tenus à jour par le snapshot : un slot repris par un joueur qui
     // rejoint en cours affiche son vrai pseudo chez tout le monde (pas l'ancien bot).
     if (raw.name) a.name = raw.name;

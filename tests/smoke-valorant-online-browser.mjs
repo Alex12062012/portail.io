@@ -75,6 +75,42 @@ try {
   });
   ok(botPlaced > 0.01, 'les bots distants sont positionnés via les snapshots (interpolation)');
 
+  // Le snapshot porte bien le vainqueur du round et les compteurs de match : sans
+  // eux le client, qui ne calcule rien en ligne, affichait « ROUND PERDU » en boucle
+  // et un scoreboard à 0 kill (le killfeed, lui, vient d'un event séparé).
+  const mirrored = await page.evaluate(() => ({
+    hasWinner: 'roundWinner' in window.net.snap,
+    hasKills: window.net.snap.actors.every((a) => typeof a.kills === 'number'),
+    applied: window.actors.every((a) => typeof a.matchKills === 'number'),
+  }));
+  ok(mirrored.hasWinner, 'snapshot : champ roundWinner transmis au client');
+  ok(mirrored.hasKills, 'snapshot : kills du match transmis pour chaque acteur');
+  ok(mirrored.applied, 'applyNet recopie les kills sur les acteurs locaux');
+
+  // Fin de round gagnée : on fige un snapshot fabriqué (la propriété d'instance
+  // masque le getter de NetClient) pour que applyNet le relise à chaque frame.
+  const won = await page.evaluate(async () => {
+    const s = JSON.parse(JSON.stringify(window.net.snap));
+    s.phase = 'end'; s.roundWinner = window.playerActor.team; s.reason = 'défenseurs éliminés';
+    s.actors.find((a) => a.id === window.playerActor.id).kills = 4;
+    Object.defineProperty(window.net, 'snap', { get: () => s, configurable: true });
+    await new Promise((r) => setTimeout(r, 150));
+    dispatchEvent(new KeyboardEvent('keydown', { code: 'Tab' })); // le scoreboard se reconstruit 4x/s
+    await new Promise((r) => setTimeout(r, 400));
+    const out = {
+      banner: document.getElementById('banner').textContent,
+      kills: window.playerActor.matchKills,
+      cell: document.querySelectorAll('#board tr.me td')[2]?.textContent,
+    };
+    dispatchEvent(new KeyboardEvent('keyup', { code: 'Tab' }));
+    delete window.net.snap; // rend la main au getter réel : les snapshots reprennent
+    return out;
+  });
+  ok(won.banner.includes('ROUND GAGNÉ'), `bannière de round gagné en ligne : « ${won.banner} »`);
+  ok(won.banner.includes('défenseurs éliminés'), 'le motif de fin de round vient du serveur');
+  ok(won.kills === 4, `kills du joueur miroités depuis le serveur (${won.kills})`);
+  ok(won.cell === '4', `scoreboard : la colonne K affiche les kills (« ${won.cell} »)`);
+
   // Écran de fin : le classement de points se rend correctement (6 lignes, colonne POINTS).
   const endInfo = await page.evaluate(() => {
     window.actors.forEach((a, i) => { a.points = (i + 1) * 10; a.pts = { kill: 0, plant: 0, roundWin: 0, move: (i + 1) * 10 }; });

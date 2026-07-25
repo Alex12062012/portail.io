@@ -20,7 +20,7 @@ export class Scoreboard {
     const my = playerActor.team;
     const row = (a) => `
       <tr class="t${a.team === my ? 0 : 1}${a === playerActor ? ' me' : ''}${a.alive ? '' : ' dead'}">
-        <td>${a.name}</td><td>${a.agentName ?? a.name}</td>
+        <td class="nm b${a.team}">${a.name}</td><td>${a.agentName ?? a.name}</td>
         <td>${a.matchKills ?? 0}</td><td>${a.matchDeaths ?? 0}</td><td>${a.assists ?? 0}</td>
         <td>${a.team === my ? `${a.wallet.credits} cr` : '—'}</td>
         <td>${a.alive ? 'vivant' : 'mort'}</td>

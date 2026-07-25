@@ -478,12 +478,17 @@ export function createValorantGame(io, room, opts = {}) {
   function snapshot() {
     return {
       phase: rm.phase, round: rm.round, timer: Math.max(0, rm.timer), score: rm.score, attackers: rm.attackers,
+      // Vainqueur + motif du round : sans eux le client ne peut pas dire au joueur
+      // s'il a gagné (la bannière de fin retombait toujours sur « ROUND PERDU »).
+      roundWinner: rm.roundWinner ?? null, reason: rm.reason ?? '',
       spike: { state: spike.state, x: spike.pos?.x ?? null, y: spike.pos?.y ?? null, z: spike.pos?.z ?? null, fuse: spike.fuse, plant: spike.plant, defuse: spike.defuse },
       actors: actors.map((a) => ({
         id: a.id, name: a.name, team: a.team, bot: a.bot, alive: a.alive,
         x: round1(a.pos.x), y: round1(a.pos.y), z: round1(a.pos.z),
         yaw: round2(a.model.rotation.y ?? a.yaw), hp: Math.round(a.hp), shield: Math.round(a.shield),
         weapon: a.weapon, role: a.role, ready: a.ready, points: Math.round(a.points ?? 0),
+        // Compteurs de match : c'est ce que lit le scoreboard (Tab) et l'écran de fin.
+        kills: a.matchKills, deaths: a.matchDeaths,
         credits: a.bot ? undefined : a.wallet.credits,
       })),
     };

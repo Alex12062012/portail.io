@@ -170,6 +170,34 @@ for (const agent of ['jett', 'sova', 'brimstone', 'sage']) {
   ok((await page.evaluate(() => document.getElementById('roundflash').textContent)).match(/ATTAQUE|DÉFENSE/),
      `${agent} : bannière de camp affichée en début de round`);
 
+  // L'annonce doit être énorme (20-25 % de la hauteur), centrée, blanche sur ombre
+  // noire, et durer exactement 2 s. `animation-fill-mode: both` garantit qu'elle
+  // reste à opacity 0 ensuite — la disparition est vérifiée plus bas (agent jett).
+  const flash = await page.evaluate(() => {
+    const el = document.getElementById('roundflash');
+    const cs = getComputedStyle(el);
+    const rg = document.createRange();
+    rg.selectNodeContents(el);
+    const r = rg.getBoundingClientRect(); // emprise réelle du texte, pas du calque
+    return {
+      ratio: parseFloat(cs.fontSize) / innerHeight,
+      color: cs.color, shadow: cs.textShadow,
+      duration: cs.animationDuration, fill: cs.animationFillMode,
+      dx: Math.abs((r.left + r.right) / 2 - innerWidth / 2),
+      dy: Math.abs((r.top + r.bottom) / 2 - innerHeight / 2),
+      overflow: r.width > innerWidth,
+    };
+  });
+  ok(flash.ratio >= 0.18 && flash.ratio <= 0.26,
+     `${agent} : annonce de camp à ${(flash.ratio * 100).toFixed(0)} % de la hauteur d'écran`);
+  ok(flash.color === 'rgb(255, 255, 255)', `${agent} : annonce de camp en blanc (${flash.color})`);
+  ok(/rgb\(0, 0, 0\)/.test(flash.shadow), `${agent} : annonce de camp avec ombre portée noire`);
+  ok(flash.duration === '2s' && flash.fill === 'both',
+     `${agent} : annonce de camp affichée 2 s puis effacée (${flash.duration}/${flash.fill})`);
+  ok(flash.dx < 3 && flash.dy < 3,
+     `${agent} : annonce de camp centrée (${flash.dx.toFixed(0)},${flash.dy.toFixed(0)} px du centre)`);
+  ok(!flash.overflow, `${agent} : annonce de camp contenue dans la largeur d'écran`);
+
   // Remise à plat avant les tests de tir : une capacité en main ou un drone en vol
   // laissent `arsenal.locked` à true, et l'Orbital Strike de Brimstone blesse encore.
   await page.evaluate(() => {
@@ -245,14 +273,26 @@ for (const agent of ['jett', 'sova', 'brimstone', 'sage']) {
     ok(await page.evaluate(() => window.spike.planted), 'spike posé après 4 s sur le site');
     ok(await page.evaluate(() => window.indicators.spikeDot.visible), 'triangle du spike sur la minimap');
 
+    // Bien au-delà des 2 s : l'annonce de camp ne doit plus rien afficher.
+    ok(await page.evaluate(() => +getComputedStyle(document.getElementById('roundflash')).opacity) === 0,
+       'annonce de camp effacée une fois ses 2 s écoulées');
+
     // Scoreboard : visible tant que Tab est maintenu, 6 lignes de joueurs.
     await page.evaluate(() => dispatchEvent(new KeyboardEvent('keydown', { code: 'Tab' })));
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(300); // le scoreboard ne se reconstruit que 4 fois/s
     const board = await page.evaluate(() => ({
       on: document.getElementById('board').classList.contains('on'),
       rows: document.querySelectorAll('#board tr:not(.gap)').length,
+      // Le pseudo porte la couleur de SON équipe, quel que soit le camp du joueur.
+      names: [...document.querySelectorAll('#board td.nm')].map((td) => ({
+        team: td.classList.contains('b0') ? 0 : 1, color: getComputedStyle(td).color,
+      })),
     }));
     ok(board.on && board.rows === 7, `scoreboard au Tab : 6 joueurs + entête (${board.rows} lignes)`);
+    ok(board.names.length === 6, `scoreboard : 6 pseudos rendus (${board.names.length})`);
+    ok(board.names.filter((x) => x.team === 0).length === 3
+       && board.names.every((x) => x.color === (x.team === 0 ? 'rgb(74, 163, 255)' : 'rgb(255, 77, 77)')),
+       `scoreboard : pseudos bleus pour l'équipe 0, rouges pour l'équipe 1 (${board.names.map((x) => x.color).join(' ')})`);
     await page.evaluate(() => dispatchEvent(new KeyboardEvent('keyup', { code: 'Tab' })));
     await page.waitForTimeout(60);
     ok(!(await page.evaluate(() => document.getElementById('board').classList.contains('on'))),

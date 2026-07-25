@@ -113,8 +113,10 @@ export class Hud {
       el.actionRing.style.visibility = act.pct ? '' : 'hidden';
     }
 
-    // Bannière ATTAQUE / DÉFENSE : une seule fois par round.
-    if (rm.round !== this.flashFor && rm.phase === 'buy') {
+    // Annonce ATTAQUE / DÉFENSE : une seule fois par round, au passage en `live`.
+    // Pas pendant la phase d'achat — le buy menu est un calque opaque plein écran
+    // (z-index 3), l'annonce y serait invisible.
+    if (rm.round !== this.flashFor && rm.phase === 'live') {
       this.flashFor = rm.round;
       const atk = my === rm.attackers;
       el.flash.textContent = atk ? 'ATTAQUE' : 'DÉFENSE';
