@@ -17,7 +17,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 const PORT = 3214;
 const BASE = `http://localhost:${PORT}`;
-const url = `${BASE}/games/valorant/?test`;
+// team=0 : le camp du joueur est tiré au sort à chaque partie depuis le prompt 16.
+// Ce parcours suppose un camp fixe — poser le spike au round 1 suppose d'attaquer,
+// et les vérifications d'ELO nomment l'équipe perdante. Le tirage lui-même et le
+// jeu depuis l'équipe rouge sont couverts plus bas et par smoke-valorant-1v3.
+const url = `${BASE}/games/valorant/?test&team=0`;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -427,7 +431,66 @@ for (const agent of ['jett', 'sova', 'brimstone', 'sage']) {
     ok(fin.on, 'écran de fin de match affiché');
     ok(fin.menu === true, 'input.menu posé : plus de recapture auto du pointer lock');
     ok(!fin.locked, 'un clic sur l’écran de fin ne rend pas la souris à la caméra');
+
+    // Le classement de fin mélange les deux équipes : le pseudo doit y porter la
+    // couleur de son équipe, comme dans le scoreboard. La surcharge verte de la
+    // ligne du joueur (tr.me) est héritée, elle ne doit pas gagner sur la cellule.
+    const endNames = await page.evaluate(() => [...document.querySelectorAll('#endscreen td.nm')]
+      .map((td) => ({ team: td.classList.contains('b0') ? 0 : 1, color: getComputedStyle(td).color })));
+    ok(endNames.length === 6, `écran de fin : 6 pseudos rendus (${endNames.length})`);
+    ok(endNames.filter((x) => x.team === 0).length === 3, 'écran de fin : 3 pseudos par équipe');
+    ok(endNames.every((x) => x.color === (x.team === 0 ? 'rgb(74, 163, 255)' : 'rgb(255, 77, 77)')),
+       `écran de fin : pseudos bleus (t0) et rouges (t1) (${endNames.map((x) => x.color).join(' ')})`);
   }
+  await page.close();
+}
+
+// --- Le joueur peut démarrer dans l'équipe rouge (prompt 16) ---------------------
+// Camp forcé à 1 : rien dans le jeu ne doit supposer que le joueur est en équipe 0,
+// et les pseudos doivent suivre l'équipe RÉELLE et non le camp relatif au joueur —
+// c'est ici que la distinction se voit, les 3 alliés étant en t1 et non en t0.
+{
+  const page = await browser.newPage();
+  page.on('pageerror', (e) => errors.push(`team=1 : ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(`team=1 console : ${m.text()}`); });
+
+  await page.goto(`${BASE}/games/valorant/?test&team=1`);
+  await page.click('#mappick button[data-map="nexus"]');
+  await page.click('#pick button[data-key="jett"]');
+  await page.waitForSelector('canvas');
+  await page.evaluate(() => { window.input.locked = true; });
+  await page.waitForSelector('#buy.on');
+  // Round lancé, personne de tuable : mêmes précautions que la boucle principale.
+  await page.evaluate(() => {
+    window.rm.timer = 0.001;
+    window.actors.forEach((a) => { a.hp = 1e4; a.maxHp = 1e4; });
+  });
+  await page.waitForTimeout(200);
+
+  const red = await page.evaluate(async () => {
+    dispatchEvent(new KeyboardEvent('keydown', { code: 'Tab' }));
+    await new Promise((r) => setTimeout(r, 400)); // le scoreboard se reconstruit 4x/s
+    const cells = [...document.querySelectorAll('#board td.nm')].map((td) => ({
+      team: td.classList.contains('b0') ? 0 : 1, color: getComputedStyle(td).color,
+    }));
+    dispatchEvent(new KeyboardEvent('keyup', { code: 'Tab' }));
+    return {
+      myTeam: window.playerActor.team,
+      mates: window.actors.filter((a) => a.team === window.playerActor.team).length,
+      foes: window.actors.filter((a) => a.team !== window.playerActor.team).length,
+      live: window.rm.live,
+      roles: window.bots.filter((b) => b.a.team === window.playerActor.team).map((b) => b.role),
+      cells,
+    };
+  });
+  ok(red.myTeam === 1, `?team=1 : le joueur démarre en équipe rouge (${red.myTeam})`);
+  ok(red.mates === 3 && red.foes === 3, `?team=1 : 3v3 conservé (${red.mates} contre ${red.foes})`);
+  ok(red.live, '?team=1 : le round se lance normalement depuis l’équipe rouge');
+  ok(new Set(red.roles).size === 2, `?team=1 : rôles distincts chez les 2 bots alliés (${red.roles.join(', ')})`);
+  ok(red.cells.filter((c) => c.team === 0).length === 3,
+     `?team=1 : 3 pseudos marqués équipe 0 (${red.cells.filter((c) => c.team === 0).length})`);
+  ok(red.cells.every((c) => c.color === (c.team === 0 ? 'rgb(74, 163, 255)' : 'rgb(255, 77, 77)')),
+     `?team=1 : couleur par équipe réelle et non relative au joueur (${red.cells.map((c) => c.color).join(' ')})`);
   await page.close();
 }
 

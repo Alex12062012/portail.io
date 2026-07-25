@@ -21,6 +21,13 @@ export function assignTeams(players, sizes = TEAM_SIZE) {
   return teams.map((humans, i) => ({ humans, bots: Math.max(0, cap[i] - humans.length) }));
 }
 
+// Miroir d'un lobby : le joueur change de camp, effectifs de bots compris. C'est
+// ici qu'on bascule le joueur en équipe 1 plutôt que dans assignTeams, qui doit
+// rester pure et déterministe. Le 1v3 reste cohérent : les tailles suivent.
+export function mirrorLobby(lobby) {
+  return { ...lobby, playerTeam: 1 - lobby.playerTeam, teams: [lobby.teams[1], lobby.teams[0]] };
+}
+
 const CSS = `
 #search{position:fixed;inset:0;z-index:4;display:grid;place-content:center;gap:10px;text-align:center;
   background:#0d1117;font:13px/1.6 ui-monospace,Consolas,monospace;color:#cfe3ee}

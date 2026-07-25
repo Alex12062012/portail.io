@@ -124,9 +124,11 @@
 #board tr.me td { border-left: 2px solid var(--cyan); }
 #board tr.dead td { opacity: .4; }
 /* Le pseudo prend la couleur de SON équipe (bleu / rouge), pas celle de son camp
-   relatif au joueur : les deux moitiés du tableau restent identifiables d'un coup d'œil. */
-#board td.nm.b0 { color: var(--team0); font-weight: 700; }
-#board td.nm.b1 { color: var(--team1); font-weight: 700; }
+   relatif au joueur : les deux moitiés du tableau restent identifiables d'un coup
+   d'œil, et le joueur peut changer de camp d'une partie à l'autre. Même règle dans
+   l'écran de fin de match, dont le classement mélange les deux équipes. */
+#board td.nm.b0, #endscreen td.nm.b0 { color: var(--team0); font-weight: 700; }
+#board td.nm.b1, #endscreen td.nm.b1 { color: var(--team1); font-weight: 700; }
 #board .gap td { background: none; border: 0; padding: 5px; }
 
 /* --- Étiquettes au-dessus des têtes --- */

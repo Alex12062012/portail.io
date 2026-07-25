@@ -155,7 +155,7 @@ export class Hud {
       const detail = `kills ${p.kill ?? 0} · spike ${p.plant ?? 0} · rounds ${p.roundWin ?? 0} · déplacement ${p.move ?? 0}`;
       return `<tr class="${a === playerActor ? 'me' : ''}" title="${detail}">
         <td>${i + 1}</td>
-        <td class="nm">${esc(a.name)}${a.bot ? ' <em>bot</em>' : ''}</td>
+        <td class="nm b${a.team}">${esc(a.name)}${a.bot ? ' <em>bot</em>' : ''}</td>
         <td class="pt">${Math.round(a.points ?? 0)}</td>
         <td>${a.matchKills ?? 0}</td></tr>`;
     }).join('');

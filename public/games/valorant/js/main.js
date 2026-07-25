@@ -16,7 +16,7 @@ import { BuyMenu } from './buy_menu.js';
 import { BotController, reassignRoles, ATK_ROLES, DEF_ROLES, registerModels } from './bots/bot_controller.js';
 import { skillOf } from './bots/bot_difficulty.js';
 import { selectProfiles } from './bots/bot_profile.js';
-import { searchMatch, assignTeams } from './matchmaking.js';
+import { searchMatch, assignTeams, mirrorLobby } from './matchmaking.js';
 import { selectMode, selectDifficulty, DIFFICULTIES } from './mode_select.js';
 import { globalElo, recentElo, record, recordSolo, soloHistory, history } from './skill_tracker.js';
 import { Hud } from './ui/hud.js';
@@ -66,6 +66,16 @@ if (online) {
     recent: recentElo(),
     seconds: location.search.includes('test') ? 1 : 15,
   });
+}
+// Camp du joueur tiré à pile ou face à chaque partie : équipe 0 (bleue) ou 1
+// (rouge). Sans ça assignTeams, déterministe, le laisse toujours en équipe 0. En
+// ligne c'est le serveur qui tranche (fillWithBots), on ne touche pas à son verdict.
+// `?team=0|1` force le tirage : les smokes ont besoin d'un camp fixe — poser le
+// spike au round 1 suppose d'être du côté attaquant.
+if (!online) {
+  const forced = new URLSearchParams(location.search).get('team');
+  const side = forced === '0' || forced === '1' ? +forced : Math.floor(Math.random() * 2);
+  if (side !== lobby.playerTeam) lobby = mirrorLobby(lobby);
 }
 overlay.style.display = 'grid';
 

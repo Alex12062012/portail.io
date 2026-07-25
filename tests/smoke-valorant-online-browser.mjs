@@ -122,6 +122,22 @@ try {
   ok(endInfo.rows === 6, `écran de fin : classement de 6 lignes (${endInfo.rows})`);
   ok(endInfo.hasPoints, 'écran de fin : colonne POINTS présente');
 
+  // Camp tiré au sort côté serveur (fillWithBots) : le client doit s'y plier, et
+  // colorer les pseudos selon l'équipe réelle des snapshots — pas selon la sienne.
+  const teams = await page.evaluate(() => ({
+    mine: window.playerActor.team,
+    t0: window.actors.filter((a) => a.team === 0).length,
+    t1: window.actors.filter((a) => a.team === 1).length,
+    board: [...document.querySelectorAll('#endscreen td.nm')]
+      .map((td) => ({ team: td.classList.contains('b0') ? 0 : 1, color: getComputedStyle(td).color })),
+  }));
+  ok(teams.mine === 0 || teams.mine === 1, `le joueur reçoit un camp du serveur (${teams.mine})`);
+  ok(teams.t0 === 3 && teams.t1 === 3, `3v3 respecté quel que soit le tirage (${teams.t0}/${teams.t1})`);
+  ok(teams.board.length === 6, `écran de fin en ligne : 6 pseudos (${teams.board.length})`);
+  ok(teams.board.filter((x) => x.team === 0).length === 3, 'écran de fin en ligne : 3 pseudos par équipe');
+  ok(teams.board.every((x) => x.color === (x.team === 0 ? 'rgb(74, 163, 255)' : 'rgb(255, 77, 77)')),
+     `écran de fin en ligne : bleu pour t0, rouge pour t1 (${teams.board.map((x) => x.color).join(' ')})`);
+
   // Aucune erreur console/page pendant tout le parcours en ligne.
   ok(errors.length === 0, 'aucune erreur console/page en mode en ligne');
 

@@ -7,7 +7,7 @@ import { Wallet, REWARD, roundReward } from './economy.js';
 import { Spike, PLANT_TIME, FUSE_TIME, DEFUSE_CHECKPOINT } from './spike.js';
 import { RoundManager, BUY_SECONDS, END_SECONDS, ROUND_TIMER_SECONDS, ROUNDS_TO_WIN } from './round_manager.js';
 import { MAPS, toCollider, siteCenter } from './maps/map_loader.js';
-import { assignTeams } from './matchmaking.js';
+import { assignTeams, mirrorLobby } from './matchmaking.js';
 import { matchElo, globalElo, recentElo, record, history, BASE_ELO,
          recordSolo, soloHistory, soloWins } from './skill_tracker.js';
 import { botParams, LOSS_BOOST } from './bots/bot_difficulty.js';
@@ -153,6 +153,22 @@ ok(solo[1].humans.length === 0 && solo[1].bots === 3, '1v3 : 3 bots en face');
 // La signature à un seul nombre reste celle du 3v3.
 const back = assignTeams([{ id: 'you', elo: 0 }]);
 ok(back[0].bots === 2 && back[1].bots === 3, 'signature à une taille : 3v3 inchangé');
+
+// Camp tiré au sort : c'est mirrorLobby qui bascule le joueur, assignTeams reste
+// déterministe. Le miroir doit emporter les effectifs, sinon un 1v3 mirroité
+// donnerait 3 bots dans l'équipe du joueur.
+const solo3v3 = { playerTeam: 0, teams: assignTeams([{ id: 'you', elo: 0 }]) };
+const flipped = mirrorLobby(solo3v3);
+ok(flipped.playerTeam === 1, 'miroir : le joueur passe en équipe 1 (rouge)');
+ok(flipped.teams[1].humans.length === 1 && flipped.teams[1].bots === 2,
+   'miroir 3v3 : le joueur garde ses 2 bots alliés, côté équipe 1');
+ok(flipped.teams[0].humans.length === 0 && flipped.teams[0].bots === 3,
+   'miroir 3v3 : les 3 bots adverses passent en équipe 0');
+const flipSolo = mirrorLobby({ playerTeam: 0, teams: assignTeams([{ id: 'you', elo: 0 }], [1, 3]) });
+ok(flipSolo.teams[1].bots === 0 && flipSolo.teams[0].bots === 3,
+   'miroir 1v3 : l’asymétrie 1 contre 3 est conservée');
+ok(mirrorLobby(flipped).playerTeam === 0 && mirrorLobby(flipped).teams[0].bots === 2,
+   'miroir appliqué deux fois : retour à l’état initial');
 
 // --- Suivi de niveau (prompt 6), stockage factice : pas de localStorage sous node --
 const fake = (() => { let v = null; return { getItem: () => v, setItem: (_, x) => { v = x; } }; })();

@@ -83,7 +83,8 @@ await sleep(200);
 ok(await page.evaluate(() => window.rm.live), 'le round est lancé');
 
 // Le rôle de tête dépend du camp des bots : « entry » s'ils attaquent, sinon
-// « anchor ». Au round 1 c'est le joueur qui attaque, donc ils défendent.
+// « anchor ». Au round 1 ce sont les t0 qui attaquent, et le camp du joueur est
+// tiré au sort — d'où la lecture dynamique de rm.attackers plutôt qu'un rôle figé.
 const succession = await page.evaluate(async () => {
   const botTeam = window.bots[0].a.team;
   const top = botTeam === window.rm.attackers ? 'entry' : 'anchor';
@@ -126,6 +127,35 @@ ok(after.end, 'écran de fin affiché');
 ok(after.solo.length === before.solo + 1, `une partie solo enregistrée (${after.solo.length})`);
 ok(after.global === before.global, 'l’historique 3v3 est resté intact');
 ok(after.solo.at(-1)?.difficulty === 'hard', 'la difficulté est consignée dans l’entrée solo');
+
+// Écran de fin : le pseudo porte la couleur de son équipe réelle. En 1v3 c'est
+// 1 contre 3, donc une couleur d'un côté et trois de l'autre — quel que soit le
+// camp tiré au sort pour le joueur.
+const endNames = await page.evaluate(() => [...document.querySelectorAll('#endscreen td.nm')]
+  .map((td) => ({ team: td.classList.contains('b0') ? 0 : 1, color: getComputedStyle(td).color })));
+ok(endNames.length === 4, `écran de fin : 4 pseudos rendus (${endNames.length})`);
+ok(endNames.every((x) => x.color === (x.team === 0 ? 'rgb(74, 163, 255)' : 'rgb(255, 77, 77)')),
+   `écran de fin : bleu pour t0, rouge pour t1 (${endNames.map((x) => x.color).join(' ')})`);
+
+// Tirage du camp (prompt 16) : on recharge jusqu'à voir les deux camps. Sans le
+// tirage, assignTeams laisserait le joueur en équipe 0 à chaque partie et la
+// boucle irait au bout sans jamais voir le rouge.
+const seen = new Set([roster.playerTeam]);
+for (let i = 0; i < 12 && seen.size < 2; i++) {
+  await page.goto(url);
+  await page.click('#mappick button[data-map="nexus"]');
+  await page.click('#pick button[data-key="jett"]');
+  await page.waitForSelector('canvas');
+  await page.waitForSelector('#buy.on');
+  const t = await page.evaluate(() => ({
+    team: window.playerActor.team,
+    mine: window.actors.filter((a) => a.team === window.playerActor.team).length,
+    foes: window.actors.filter((a) => a.team !== window.playerActor.team).length,
+  }));
+  ok(t.mine === 1 && t.foes === 3, `tirage ${i} : le 1v3 reste 1 contre 3 (${t.mine}/${t.foes})`);
+  seen.add(t.team);
+}
+ok(seen.size === 2, `le camp du joueur est tiré au sort en local (camps vus : ${[...seen].sort()})`);
 
 await page.close();
 await browser.close();

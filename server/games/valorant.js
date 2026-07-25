@@ -181,9 +181,14 @@ export function createValorantGame(io, room, opts = {}) {
     const totalBots = teams.reduce((s, tm) => s + tm.bots, 0);
     const profs = (!opts.assignProfile && TRAINED) ? selectProfiles(TRAINED, totalBots, { skill: 1 }) : null;
     let k = 0;
-    teams.forEach((tm, ti) => {
+    // Camp tiré à pile ou face à chaque partie : assignTeams est déterministe et
+    // mettrait toujours le premier humain en équipe 0 (bleue). On miroite les deux
+    // côtés d'un coup — humains et places de bots suivent.
+    const flip = Math.random() < 0.5 ? 1 : 0;
+    teams.forEach((tm, i) => {
+      const ti = i ^ flip;
       for (const h of tm.humans) actors.find((a) => a.id === h.id).team = ti;
-      for (let i = 0; i < tm.bots; i++) addBot(ti, i, profs ? profs[k++] : undefined);
+      for (let b = 0; b < tm.bots; b++) addBot(ti, b, profs ? profs[k++] : undefined);
     });
   }
 

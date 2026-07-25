@@ -91,4 +91,21 @@ ok(snap.actors.find((a) => a.id === you.id).kills === you.matchKills && you.matc
    `snapshot : les kills de l’humain remontent (${snap.actors.find((a) => a.id === you.id).kills})`);
 ok(snap.actors.filter((a) => a.deaths > 0).length === 3, 'snapshot : les 3 défenseurs comptent une mort');
 
+// --- Camp du joueur tiré au sort à chaque partie --------------------------------
+// 40 parties neuves : les deux camps doivent sortir. Le tirage est dans
+// fillWithBots — assignTeams, pure, mettrait toujours l'humain en équipe 0.
+const sides = new Set();
+for (let i = 0; i < 40; i++) {
+  const g = createValorantGame(io, { code: 'T' + i, status: 'lobby', isPublic: true },
+                               { waitSeconds: 0, mapId: 'nexus' });
+  g.addHuman('you', 'Vous', 'jett');
+  g.start();
+  g.tick(0.05); // begin() → fillWithBots
+  sides.add(g._actors.find((a) => a.socketId === 'you').team);
+  ok(g._actors.filter((a) => a.team === 0).length === 3
+     && g._actors.filter((a) => a.team === 1).length === 3, `partie ${i} : équipes toujours 3 et 3`);
+  g.abort('fin de test');
+}
+ok(sides.has(0) && sides.has(1), `en ligne : le joueur joue les deux camps sur 40 parties (${[...sides]})`);
+
 console.log(`unit-valorant-online : ${n} assertions OK`);
