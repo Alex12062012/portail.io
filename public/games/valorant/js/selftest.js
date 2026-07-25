@@ -14,6 +14,7 @@ import { botParams, LOSS_BOOST } from './bots/bot_difficulty.js';
 import { BotController, reassignRoles, ATK_ROLES, DEF_ROLES } from './bots/bot_controller.js';
 import { bearing } from './ui/damage_indicator.js';
 import { award, awardMovement, ranking, POINTS } from './points.js';
+import { randomProfile, clampProfile, mutate, paramsOf, behavior, niche, scaleProfile, selectProfiles, RANGES } from './bots/bot_profile.js';
 
 const box = (min, max, ramp) => ({
   min: { x: min[0], y: min[1], z: min[2] },
@@ -575,6 +576,49 @@ ok(rm.phase === 'live', 'après la pose, éliminer les attaquants ne suffit plus
 rm.update(FUSE_TIME);
 ok(rm.winner === 0 && rm.phase === 'match', 'spike explosé : 3e round gagné, match terminé');
 near(rm.score[0], ROUNDS_TO_WIN, 'match remporté à 3 rounds gagnés');
+
+// --- Profil de bot (bot_profile.js) --------------------------------------------
+{
+  let seed = 42; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const prof = randomProfile(rnd);
+  ok(Object.keys(RANGES).every((g) => prof[g] >= RANGES[g][0] && prof[g] <= RANGES[g][1]),
+     'randomProfile : tous les gènes dans leurs bornes');
+  const wild = clampProfile({ reaction: -5, aimError: 999, aggression: 2, roam: -1 });
+  ok(wild.reaction >= RANGES.reaction[0] && wild.aimError <= RANGES.aimError[1]
+     && wild.aggression <= 1 && wild.roam >= 0, 'clampProfile ramène tout dans les bornes');
+  let allBounded = true;
+  for (let i = 0; i < 200; i++) {
+    const m = mutate(prof, 0.4, rnd);
+    if (!Object.keys(RANGES).every((g) => m[g] >= RANGES[g][0] - 1e-9 && m[g] <= RANGES[g][1] + 1e-9)) allBounded = false;
+  }
+  ok(allBounded, 'mutate reste borné sur 200 mutations');
+  const pr = paramsOf({ ...prof, reaction: 0.18 });
+  ok(pr.reaction >= 0.18 && pr.aimError >= RANGES.aimError[0], 'paramsOf : jamais sous-humain (pas d’aimbot)');
+  const aggr = behavior({ aggression: 1, roam: 0 }), passive = behavior({ aggression: 0, roam: 0 });
+  ok(aggr.supportDelay < passive.supportDelay && aggr.escortGap < passive.escortGap,
+     'behavior : un profil agressif pousse plus tôt et colle plus');
+  const roamy = behavior({ aggression: 0.5, roam: 1 }), anchor = behavior({ aggression: 0.5, roam: 0 });
+  ok(roamy.patrolEvery < anchor.patrolEvery, 'behavior : un profil mobile change de site plus souvent');
+  ok(/^\d+,\d+$/.test(niche(prof)), 'niche : coordonnée de grille valide');
+
+  // Le BotController prend le profil quand il est fourni, et reste inchangé sinon.
+  const nav = MAPS.nexus.nav;
+  const withProf = new BotController({ pos: { x: 0, y: 0, z: 0 }, team: 0 }, 1000, nav, { aggression: 1, roam: 1, reaction: 0.2, fireInterval: 0.5, aimError: 1, headshotChance: 0.3, abilityChance: 0.5 });
+  ok(Math.abs(withProf.p.reaction - 0.2) < 1e-9, 'BotController(profil) : compétence issue du profil');
+  ok(withProf.escortGap < 7, 'BotController(profil) : mouvement issu du profil (agressif)');
+  const dflt = new BotController({ pos: { x: 0, y: 0, z: 0 }, team: 0 }, 1000, nav);
+  ok(Math.abs(dflt.p.reaction - botParams(1000).reaction) < 1e-9, 'BotController(sans profil) : comportement ELO inchangé');
+
+  // Calage sur la difficulté : le style est conservé, la compétence dégradée si skill<1.
+  const base = { aggression: 0.8, roam: 0.3, reaction: 0.2, fireInterval: 0.5, aimError: 1, headshotChance: 0.4, abilityChance: 0.7 };
+  const full = scaleProfile(base, 1), weak = scaleProfile(base, 0);
+  ok(Math.abs(full.reaction - 0.2) < 1e-9, 'scaleProfile(skill=1) garde la compétence entraînée');
+  ok(weak.reaction > full.reaction && weak.aimError > full.aimError, 'scaleProfile(skill=0) dégrade la compétence');
+  ok(Math.abs(weak.aggression - base.aggression) < 1e-9 && Math.abs(weak.roam - base.roam) < 1e-9, 'scaleProfile conserve le STYLE quel que soit le niveau');
+  const picks = selectProfiles([{ profile: base }, { profile: { ...base, aggression: 0.1 } }], 3, { skill: 0.5 });
+  ok(picks.length === 3 && picks.every((p) => p && p.aggression != null), 'selectProfiles renvoie le bon nombre de profils calés');
+  ok(selectProfiles([], 3)[0] === null, 'selectProfiles([]) → null (repli sur l’ELO)');
+}
 
 // --- Points / récompense (points.js) -------------------------------------------
 {

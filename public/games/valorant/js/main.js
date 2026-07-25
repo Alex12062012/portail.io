@@ -14,6 +14,8 @@ import { Spike, BLAST_RADIUS, PLANT_TIME, DEFUSE_TIME } from './spike.js';
 import { RoundManager, ROUNDS_TO_WIN, STARTING_ULT_POINTS } from './round_manager.js';
 import { BuyMenu } from './buy_menu.js';
 import { BotController, reassignRoles, ATK_ROLES, DEF_ROLES } from './bots/bot_controller.js';
+import { skillOf } from './bots/bot_difficulty.js';
+import { selectProfiles } from './bots/bot_profile.js';
 import { searchMatch, assignTeams } from './matchmaking.js';
 import { selectMode, selectDifficulty, DIFFICULTIES } from './mode_select.js';
 import { globalElo, recentElo, record, recordSolo, soloHistory, history } from './skill_tracker.js';
@@ -138,7 +140,18 @@ if (online) {
     actors.push(actor);
   }
 } else {
-  // 3v3 local / 1v3 : les places restantes sont des bots, au niveau demandé.
+  // 3v3 local / 1v3 : les places restantes sont des bots. Si des profils entraînés
+  // existent (training/), on en pioche un jeu VARIÉ calé sur le niveau demandé
+  // (skillOf(botElo)) ; sinon comportement ELO par défaut (aucune régression).
+  let trained = null;
+  try {
+    const r = await fetch(new URL('./bots/profiles.json', import.meta.url));
+    if (r.ok) trained = (await r.json()).profiles ?? null;
+  } catch { /* pas de profils entraînés : on garde l'ELO */ }
+  const botCount = lobby.teams[0].bots + lobby.teams[1].bots;
+  const profs = trained?.length ? selectProfiles(trained, botCount, { skill: skillOf(botElo) }) : null;
+  let pk = 0;
+
   const pool = AGENT_KEYS.filter((k) => k !== agentKey);
   let nextAgent = 0;
   for (let team = 0; team < 2; team++) {
@@ -157,7 +170,7 @@ if (online) {
       };
       model.userData.actor = actor;
       actors.push(actor);
-      bots.push(new BotController(actor, botElo, map.nav));
+      bots.push(new BotController(actor, botElo, map.nav, profs ? profs[pk++] : null));
     }
   }
 }

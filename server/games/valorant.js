@@ -29,6 +29,18 @@ import { assignTeams } from '../../public/games/valorant/js/matchmaking.js';
 import { MAPS, toCollider, siteAt as siteAtRaw, siteCenter, spawnSet } from '../../public/games/valorant/js/maps/map_loader.js';
 import { blocked, groundHeight } from '../../public/games/valorant/js/player.js';
 import { award, awardMovement, ranking } from '../../public/games/valorant/js/points.js';
+import { selectProfiles } from '../../public/games/valorant/js/bots/bot_profile.js';
+import fs from 'node:fs';
+
+// Profils de bots entraînés (training/) s'ils existent : donnent aux bots des
+// styles variés. Absent → comportement ELO par défaut (aucune régression).
+const TRAINED = (() => {
+  try {
+    const p = new URL('../../public/games/valorant/js/bots/profiles.json', import.meta.url);
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return j.profiles?.length ? j.profiles : null;
+  } catch { return null; }
+})();
 
 // Doit rester aligné sur les agents réellement définis côté client (abilities.js).
 const AGENT_KEYS = ['jett', 'sova', 'brimstone', 'sage'];
@@ -62,6 +74,7 @@ function segHitsBox(a, b, box) {
 
 export function createValorantGame(io, room, opts = {}) {
   const waitSeconds = opts.waitSeconds ?? WAIT_SECONDS;
+  const silent = !!opts.silent; // entraînement headless : on ne diffuse pas de snapshot
   const mapId = opts.mapId ?? pickMapId();
   const mapDef = MAPS[mapId];
   const solids = mapDef.solids.map(toCollider);
@@ -140,12 +153,14 @@ export function createValorantGame(io, room, opts = {}) {
     return a;
   }
 
-  function addBot(team) {
+  function addBot(team, i = 0, profile) {
     const key = AGENT_KEYS[botSeq++ % AGENT_KEYS.length];
     const dupes = actors.filter((x) => x.agentKey === key).length;
     const a = makeActor(key + (dupes ? ` ${dupes + 1}` : ''), key, team, true, null);
     actors.push(a);
-    const bc = new BotController(a, BOT_ELO, nav);
+    // Priorité : profil explicite (fillWithBots) → hook d'entraînement → ELO défaut.
+    const p = profile !== undefined ? profile : (opts.assignProfile?.(team, i) ?? null);
+    const bc = new BotController(a, BOT_ELO, nav, p);
     bots.push(bc);
     controllerOf.set(a, bc);
     return a;
@@ -161,9 +176,14 @@ export function createValorantGame(io, room, opts = {}) {
     // ponytail: ELO humain inconnu côté serveur → assignTeams reçoit elo:0 ; le
     // cas « 3 réels, meilleur ELO seul » retombe donc sur « le 1er reste seul ».
     const teams = assignTeams(humans.map((h) => ({ id: h.id, elo: 0 })), TEAM_SIZE);
+    // Hors entraînement : si des profils entraînés existent, on en pioche un jeu
+    // VARIÉ pour la partie (styles distincts). Sinon, comportement ELO par défaut.
+    const totalBots = teams.reduce((s, tm) => s + tm.bots, 0);
+    const profs = (!opts.assignProfile && TRAINED) ? selectProfiles(TRAINED, totalBots, { skill: 1 }) : null;
+    let k = 0;
     teams.forEach((tm, ti) => {
       for (const h of tm.humans) actors.find((a) => a.id === h.id).team = ti;
-      for (let i = 0; i < tm.bots; i++) addBot(ti);
+      for (let i = 0; i < tm.bots; i++) addBot(ti, i, profs ? profs[k++] : undefined);
     });
   }
 
@@ -363,7 +383,7 @@ export function createValorantGame(io, room, opts = {}) {
 
     if (rm.phase === 'match' && running) return end();
 
-    emit('val:snap', snapshot());
+    if (!silent) emit('val:snap', snapshot());
   }
 
   function tickTeleports() {

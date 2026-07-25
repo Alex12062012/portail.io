@@ -7,6 +7,7 @@ import { blocked, groundHeight } from '../player.js';
 import { WEAPONS, damage } from '../weapons.js';
 import { SHIELDS } from '../economy.js';
 import { botParams, LOSS_BOOST } from './bot_difficulty.js';
+import { paramsOf, behavior } from './bot_profile.js';
 
 const SPEED = 4.6;   // un peu sous le joueur (5.5) : il reste rattrapable
 const HEIGHT = 1.8;
@@ -53,13 +54,25 @@ const dist2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 export class BotController {
   // a : l'acteur (pos, hp, team, wallet…) ; elo : niveau de départ (moyen global) ;
   // nav : routes de la map active.
-  constructor(a, elo, nav) {
+  // profile (optionnel) : un gène de style/compétence (bot_profile.js) issu de
+  // l'entraînement. Absent → comportement historique piloté par l'ELO, inchangé.
+  constructor(a, elo, nav, profile = null) {
     this.a = a;
     this.nav = nav;
     this.rotBA = [...nav.rotAB].reverse(); // calculée une fois, pas à chaque frame
     this.weapon = WEAPONS.classic;
     this.elo = elo;
-    this.p = botParams(elo);
+    this.profile = profile;
+    if (profile) {
+      this.p = paramsOf(profile);
+      const b = behavior(profile);
+      this.supportDelay = b.supportDelay; this.escortGap = b.escortGap;
+      this.patrolEvery = b.patrolEvery; this.rotateAfter = b.rotateAfter;
+    } else {
+      this.p = botParams(elo);
+      this.supportDelay = SUPPORT_DELAY; this.escortGap = ESCORT_GAP;
+      this.patrolEvery = PATROL_EVERY; this.rotateAfter = ROTATE_AFTER;
+    }
     this.newRound(0, 0);
   }
 
@@ -78,9 +91,22 @@ export class BotController {
     if (role === 'anchor') { this.patrol = Infinity; this.rotateIn = Infinity; }
   }
 
-  // Round perdu par son équipe : montée progressive (spec : +2 à +5 %).
+  // Round perdu par son équipe : montée progressive (spec : +2 à +5 %). Le niveau
+  // de départ est un PLANCHER, y compris pour un bot à profil : son STYLE reste
+  // figé, mais sa compétence grimpe au même rythme que l'ELO.
   boost() {
     this.elo *= LOSS_BOOST;
+    if (this.profile) {
+      this.p = {
+        ...this.p,
+        reaction: Math.max(0.15, this.p.reaction / LOSS_BOOST),
+        fireInterval: Math.max(0.3, this.p.fireInterval / LOSS_BOOST),
+        aimError: Math.max(0.4, this.p.aimError / LOSS_BOOST),
+        headshotChance: Math.min(0.6, this.p.headshotChance * LOSS_BOOST),
+        abilityChance: Math.min(0.98, this.p.abilityChance * LOSS_BOOST),
+      };
+      return;
+    }
     this.p = botParams(this.elo);
   }
 
@@ -92,9 +118,9 @@ export class BotController {
     this.buyIn = 2 + i * 0.6;
     this.role = (this.a.team === attackers ? ATK_ROLES : DEF_ROLES)[i % 3];
     this.holdSite = i % 2 ? 'B' : 'A'; // les défenseurs se répartissent les sites
-    this.wait = this.role === 'support' ? SUPPORT_DELAY : 0;
-    this.patrol = PATROL_EVERY;
-    this.rotateIn = ROTATE_AFTER;
+    this.wait = this.role === 'support' ? this.supportDelay : 0;
+    this.patrol = this.patrolEvery;
+    this.rotateIn = this.rotateAfter;
     this.sawEnemy = false;
     this.deployed = false; // a rejoint son poste : il rote ensuite par la route inter-sites
     this.routeKey = null;
@@ -207,7 +233,7 @@ export class BotController {
         return;
       }
       if (ctx.carrier?.player) { // escorte du joueur porteur
-        if (dist2(me.pos, ctx.carrier.pos) > ESCORT_GAP) this.walk(dt, ctx.carrier.pos, ctx.solids);
+        if (dist2(me.pos, ctx.carrier.pos) > this.escortGap) this.walk(dt, ctx.carrier.pos, ctx.solids);
         return;
       }
       // Le support colle au titulaire d'`entry` — joueur ou bot, selon qui a
@@ -215,7 +241,7 @@ export class BotController {
       if (this.role === 'support') {
         const lead = ctx.roleHolder(me.team, 'entry');
         if (lead && lead !== me) {
-          if (dist2(me.pos, lead.pos) > ESCORT_GAP) this.walk(dt, lead.pos, ctx.solids);
+          if (dist2(me.pos, lead.pos) > this.escortGap) this.walk(dt, lead.pos, ctx.solids);
           else this.followRoute(dt, 'atk' + site, ctx.solids);
           return;
         }
@@ -248,7 +274,7 @@ export class BotController {
     const flip = () => { this.holdSite = this.holdSite === 'A' ? 'B' : 'A'; };
     if (this.role === 'roamer') {
       this.patrol -= dt;
-      if (this.patrol <= 0) { this.patrol = PATROL_EVERY; flip(); }
+      if (this.patrol <= 0) { this.patrol = this.patrolEvery; flip(); }
     } else if (this.role === 'rotator' && !this.sawEnemy) {
       this.rotateIn -= dt;
       if (this.rotateIn <= 0) { this.rotateIn = Infinity; flip(); } // une seule fois
