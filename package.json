@@ -8,7 +8,8 @@
     "start": "node server/server.js",
     "server-only": "node server/server.js --no-tunnel",
     "dev": "node --watch server/server.js --no-tunnel",
-    "test": "node tests/maps.mjs && node tests/unit-tag.mjs && node tests/unit-mine.mjs && node tests/smoke.mjs && node tests/smoke-mine.mjs && node tests/smoke-valorant.mjs && node tests/smoke-valorant-1v3.mjs && node tests/unit-valorant-online.mjs && node tests/smoke-valorant-online.mjs && node tests/smoke-valorant-online-browser.mjs",
+    "test": "node tests/maps.mjs && node tests/unit-tag.mjs && node tests/unit-mine.mjs && node tests/smoke.mjs && node tests/smoke-mine.mjs && node tests/smoke-valorant.mjs && node tests/smoke-valorant-1v3.mjs && node tests/unit-valorant-online.mjs && node tests/smoke-valorant-online.mjs && node tests/smoke-valorant-online-browser.mjs && node public/games/valorant/tools/train/train.test.js",
+    "train": "node public/games/valorant/tools/train/train.js",
     "map-compare": "node scripts/map-compare.mjs"
   },
   "keywords": [

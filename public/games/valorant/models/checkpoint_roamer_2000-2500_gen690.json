@@ -1,0 +1,24 @@
+{
+  "role": "roamer",
+  "elo": 2033,
+  "eloRange": [
+    2000,
+    2500
+  ],
+  "gen": 690,
+  "fitness": 614,
+  "winRate": 0.5,
+  "reference": {
+    "elo": 2033,
+    "promotions": 5
+  },
+  "params": {
+    "reaction": 0.18,
+    "fireInterval": 0.4,
+    "aimError": 0.5,
+    "headshotChance": 0.45,
+    "abilityChance": 0.8131742656322987,
+    "aggression": 0.7740268722924681,
+    "roam": 0
+  }
+}

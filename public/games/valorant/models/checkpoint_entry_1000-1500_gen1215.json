@@ -1,0 +1,24 @@
+{
+  "role": "entry",
+  "elo": 1466,
+  "eloRange": [
+    1000,
+    1500
+  ],
+  "gen": 1215,
+  "fitness": 810,
+  "winRate": 0.15,
+  "reference": {
+    "elo": 1767,
+    "promotions": 4
+  },
+  "params": {
+    "reaction": 0.18,
+    "fireInterval": 0.4,
+    "aimError": 0.5,
+    "headshotChance": 0.44397254939390596,
+    "abilityChance": 0.95,
+    "aggression": 0.5724867206540851,
+    "roam": 0.07122685447902007
+  }
+}

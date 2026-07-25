@@ -8,6 +8,7 @@
 import path from 'node:path';
 import http from 'node:http';
 import os from 'node:os';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server } from 'socket.io';
@@ -17,11 +18,25 @@ import { createMineGame } from './games/mine-coop.js';
 import { createValorantGame } from './games/valorant.js';
 import { TAG } from '../shared/tag-map.js';
 import { loadSaveIfExists, listSaves, randomSeed } from './mine-save.js';
+import { registerModels } from '../public/games/valorant/js/bots/bot_controller.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.PORT) || 3000;
 const NO_TUNNEL = process.argv.includes('--no-tunnel');
+
+// Modèles de bots entraînés par rôle (public/games/valorant/tools/train). Absents
+// => les bots gardent leur comportement scripté par ELO : rien ne casse.
+(() => {
+  const dir = path.join(ROOT, 'public/games/valorant/models');
+  try {
+    const models = fs.readdirSync(dir)
+      .filter((f) => f.startsWith('best_') && f.endsWith('.json'))
+      .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
+    const n = registerModels(models);
+    if (n) console.log(`valorant : ${n} modèles de bots entraînés chargés`);
+  } catch { /* dossier absent ou illisible : bots scriptés */ }
+})();
 
 // ---- registre des jeux ------------------------------------------------------
 // Pour ajouter un jeu : créer server/games/<id>.js + public/games/<id>/,

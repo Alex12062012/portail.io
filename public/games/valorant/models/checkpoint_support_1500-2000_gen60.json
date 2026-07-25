@@ -1,0 +1,24 @@
+{
+  "role": "support",
+  "elo": 1529,
+  "eloRange": [
+    1500,
+    2000
+  ],
+  "gen": 60,
+  "fitness": 494,
+  "winRate": 0.6,
+  "reference": {
+    "elo": 1459,
+    "promotions": 2
+  },
+  "params": {
+    "reaction": 0.18,
+    "fireInterval": 0.4,
+    "aimError": 0.5,
+    "headshotChance": 0.45,
+    "abilityChance": 0.9329587898451585,
+    "aggression": 0.731901876283233,
+    "roam": 0.45533685339551017
+  }
+}

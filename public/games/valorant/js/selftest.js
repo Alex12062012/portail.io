@@ -11,7 +11,7 @@ import { assignTeams } from './matchmaking.js';
 import { matchElo, globalElo, recentElo, record, history, BASE_ELO,
          recordSolo, soloHistory, soloWins } from './skill_tracker.js';
 import { botParams, LOSS_BOOST } from './bots/bot_difficulty.js';
-import { BotController, reassignRoles, ATK_ROLES, DEF_ROLES } from './bots/bot_controller.js';
+import { BotController, reassignRoles, ATK_ROLES, DEF_ROLES, getModelForBot } from './bots/bot_controller.js';
 import { bearing } from './ui/damage_indicator.js';
 import { award, awardMovement, ranking, POINTS } from './points.js';
 import { randomProfile, clampProfile, mutate, paramsOf, behavior, niche, scaleProfile, selectProfiles, RANGES } from './bots/bot_profile.js';
@@ -224,7 +224,10 @@ const flipsOver = (bot, seconds) => {
 };
 const [anchor, roamer, rotator] = mkBots(1, 0);
 ok(flipsOver(anchor, 40) === 0, 'anchor : ne quitte jamais son site');
-ok(flipsOver(roamer, 40) >= 3, 'roamer : fait la navette entre les sites');
+// Seuil à 2 et non 3 : un modèle entraîné (models/index.json) peut donner un roam
+// bas, donc un patrolEvery jusqu'à 14 s — soit 2 bascules sur 40 s. On vérifie ici
+// qu'un roamer BOUGE (vs 0 pour l'anchor, 1 pour le rotator), pas sa cadence.
+ok(flipsOver(roamer, 40) >= 2, 'roamer : fait la navette entre les sites');
 ok(flipsOver(rotator, 40) === 1, 'rotator : bascule une seule fois, sans ennemi vu');
 const seenRot = mkBots(1, 0)[2];
 seenRot.sawEnemy = true;
@@ -602,12 +605,19 @@ near(rm.score[0], ROUNDS_TO_WIN, 'match remporté à 3 rounds gagnés');
   ok(/^\d+,\d+$/.test(niche(prof)), 'niche : coordonnée de grille valide');
 
   // Le BotController prend le profil quand il est fourni, et reste inchangé sinon.
+  // Priorité réelle : modèle de rôle entraîné (tools/train) > profil > ELO. On
+  // compare à la source que cette priorité désigne, pour que le test dise vrai
+  // que models/ soit rempli ou non.
   const nav = MAPS.nexus.nav;
-  const withProf = new BotController({ pos: { x: 0, y: 0, z: 0 }, team: 0 }, 1000, nav, { aggression: 1, roam: 1, reaction: 0.2, fireInterval: 0.5, aimError: 1, headshotChance: 0.3, abilityChance: 0.5 });
-  ok(Math.abs(withProf.p.reaction - 0.2) < 1e-9, 'BotController(profil) : compétence issue du profil');
-  ok(withProf.escortGap < 7, 'BotController(profil) : mouvement issu du profil (agressif)');
+  const styled = { aggression: 1, roam: 1, reaction: 0.2, fireInterval: 0.5, aimError: 1, headshotChance: 0.3, abilityChance: 0.5 };
+  const source = (bc, fallback) => getModelForBot(bc.role, bc.elo)?.params ?? fallback;
+  const withProf = new BotController({ pos: { x: 0, y: 0, z: 0 }, team: 0 }, 1000, nav, styled);
+  ok(Math.abs(withProf.p.reaction - paramsOf(source(withProf, styled)).reaction) < 1e-9, 'BotController(profil) : compétence issue du profil');
+  ok(withProf.escortGap === behavior(source(withProf, styled)).escortGap, 'BotController(profil) : mouvement issu du profil (agressif)');
   const dflt = new BotController({ pos: { x: 0, y: 0, z: 0 }, team: 0 }, 1000, nav);
-  ok(Math.abs(dflt.p.reaction - botParams(1000).reaction) < 1e-9, 'BotController(sans profil) : comportement ELO inchangé');
+  const dfltModel = getModelForBot(dflt.role, dflt.elo);
+  ok(Math.abs(dflt.p.reaction - (dfltModel ? paramsOf(dfltModel.params) : botParams(1000)).reaction) < 1e-9,
+     'BotController(sans profil) : modèle de rôle s’il existe, sinon comportement ELO inchangé');
 
   // Calage sur la difficulté : le style est conservé, la compétence dégradée si skill<1.
   const base = { aggression: 0.8, roam: 0.3, reaction: 0.2, fireInterval: 0.5, aimError: 1, headshotChance: 0.4, abilityChance: 0.7 };

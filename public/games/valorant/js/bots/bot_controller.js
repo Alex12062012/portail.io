@@ -51,6 +51,30 @@ const tierCost = (t) => WEAPONS[t.gun].price + (t.shield ? SHIELDS[t.shield].pri
 
 const dist2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
+// --- Modèles entraînés par rôle (tools/train) -------------------------------------
+// Registre PUR : la LECTURE du fichier reste chez l'appelant (fs côté serveur,
+// fetch côté navigateur) — ce module doit tourner dans les deux mondes.
+// Aucun modèle chargé => getModelForBot renvoie null => comportement historique.
+let MODELS = [];
+
+export function registerModels(models) {
+  MODELS = Array.isArray(models) ? models.filter((m) => m && m.role && m.params) : [];
+  return MODELS.length;
+}
+
+// Modèle du rôle demandé dont la TRANCHE est la plus proche de l'ELO visé
+// (distance nulle si l'ELO tombe dedans). null si rien n'est chargé pour ce rôle.
+export function getModelForBot(role, eloTarget) {
+  let best = null, bd = Infinity;
+  for (const m of MODELS) {
+    if (m.role !== role) continue;
+    const [lo, hi] = m.eloRange ?? [-Infinity, Infinity];
+    const d = eloTarget < lo ? lo - eloTarget : eloTarget > hi ? eloTarget - hi : 0;
+    if (d < bd) { bd = d; best = m; }
+  }
+  return best;
+}
+
 export class BotController {
   // a : l'acteur (pos, hp, team, wallet…) ; elo : niveau de départ (moyen global) ;
   // nav : routes de la map active.
@@ -63,17 +87,38 @@ export class BotController {
     this.weapon = WEAPONS.classic;
     this.elo = elo;
     this.profile = profile;
-    if (profile) {
-      this.p = paramsOf(profile);
-      const b = behavior(profile);
+    this.modelKey = null;
+    this.applyParams(null); // niveau de départ ; newRound() branchera le modèle du rôle
+    this.newRound(0, 0);
+  }
+
+  // Source de compétence, par ordre de priorité : modèle entraîné par RÔLE
+  // (tools/train) > profil de style (self-play MAP-Elites) > ELO scripté.
+  applyParams(model) {
+    const src = model?.params ?? this.profile;
+    if (src) {
+      this.p = paramsOf(src);
+      const b = behavior(src);
       this.supportDelay = b.supportDelay; this.escortGap = b.escortGap;
       this.patrolEvery = b.patrolEvery; this.rotateAfter = b.rotateAfter;
     } else {
-      this.p = botParams(elo);
+      this.p = botParams(this.elo);
       this.supportDelay = SUPPORT_DELAY; this.escortGap = ESCORT_GAP;
       this.patrolEvery = PATROL_EVERY; this.rotateAfter = ROTATE_AFTER;
     }
-    this.newRound(0, 0);
+  }
+
+  // Bascule à chaud sur le modèle correspondant à (rôle, ELO courant) : appelée à
+  // chaque changement de rôle et à chaque montée d'ELO, sans recréer le bot.
+  // No-op si le modèle sélectionné ne change pas — sinon on écraserait à chaque
+  // round la compétence accumulée par boost().
+  syncModel() {
+    const m = getModelForBot(this.role, this.elo);
+    const key = m ? `${m.role}:${m.eloRange?.join('-')}` : '';
+    if (key === this.modelKey) return false;
+    this.modelKey = key;
+    this.applyParams(m);
+    return true;
   }
 
   // Le rôle vit sur l'ACTEUR : c'est le seul endroit où joueur et bots se lisent
@@ -87,6 +132,7 @@ export class BotController {
   // promu entry continuerait d'attendre et un roamer promu anchor de patrouiller.
   promote(role) {
     this.role = role;
+    this.syncModel(); // nouveau rôle => modèle entraîné pour ce rôle
     if (role === 'entry') this.wait = 0;
     if (role === 'anchor') { this.patrol = Infinity; this.rotateIn = Infinity; }
   }
@@ -96,7 +142,10 @@ export class BotController {
   // figé, mais sa compétence grimpe au même rythme que l'ELO.
   boost() {
     this.elo *= LOSS_BOOST;
-    if (this.profile) {
+    // L'ELO a monté : peut-être vers une autre tranche. Si le modèle change, il
+    // porte déjà le niveau visé — pas de rampe à appliquer en plus.
+    if (this.syncModel()) return;
+    if (this.modelKey || this.profile) {
       this.p = {
         ...this.p,
         reaction: Math.max(0.15, this.p.reaction / LOSS_BOOST),
@@ -117,6 +166,7 @@ export class BotController {
     this.a.ready = false;
     this.buyIn = 2 + i * 0.6;
     this.role = (this.a.team === attackers ? ATK_ROLES : DEF_ROLES)[i % 3];
+    this.syncModel(); // le camp alterne : le rôle change, donc le modèle aussi
     this.holdSite = i % 2 ? 'B' : 'A'; // les défenseurs se répartissent les sites
     this.wait = this.role === 'support' ? this.supportDelay : 0;
     this.patrol = this.patrolEvery;

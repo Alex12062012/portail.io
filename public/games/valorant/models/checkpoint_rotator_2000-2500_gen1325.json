@@ -1,0 +1,24 @@
+{
+  "role": "rotator",
+  "elo": 2043,
+  "eloRange": [
+    2000,
+    2500
+  ],
+  "gen": 1325,
+  "fitness": 594,
+  "winRate": 0.55,
+  "reference": {
+    "elo": 2008,
+    "promotions": 5
+  },
+  "params": {
+    "reaction": 0.18,
+    "fireInterval": 0.4,
+    "aimError": 0.6253356112373502,
+    "headshotChance": 0.45,
+    "abilityChance": 0.8366897447320968,
+    "aggression": 0.5060477472087648,
+    "roam": 0.7814455297843955
+  }
+}

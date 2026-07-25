@@ -1,0 +1,24 @@
+{
+  "role": "lurker",
+  "elo": 1597,
+  "eloRange": [
+    1500,
+    2000
+  ],
+  "gen": 1120,
+  "fitness": 650,
+  "winRate": 0.6,
+  "reference": {
+    "elo": 1527,
+    "promotions": 3
+  },
+  "params": {
+    "reaction": 0.18,
+    "fireInterval": 0.4,
+    "aimError": 0.5,
+    "headshotChance": 0.45,
+    "abilityChance": 0.95,
+    "aggression": 1,
+    "roam": 0
+  }
+}

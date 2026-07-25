@@ -1,0 +1,24 @@
+{
+  "role": "anchor",
+  "elo": 1540,
+  "eloRange": [
+    1500,
+    2000
+  ],
+  "gen": 80,
+  "fitness": 773,
+  "winRate": 0.25,
+  "reference": {
+    "elo": 1731,
+    "promotions": 3
+  },
+  "params": {
+    "reaction": 0.18362913628713473,
+    "fireInterval": 0.4,
+    "aimError": 0.5,
+    "headshotChance": 0.45,
+    "abilityChance": 0.6541390329538337,
+    "aggression": 1,
+    "roam": 0
+  }
+}

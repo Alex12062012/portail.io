@@ -5,3 +5,4 @@ tests/artifacts/
 .claude/
 saves/
 training/archive.json
+public/games/valorant/logs/*.jsonl
