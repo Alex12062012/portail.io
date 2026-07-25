@@ -99,6 +99,12 @@ try {
   })).actors.find((x) => x.id === bId);
   ok(bAfter.hp < bBefore || !bAfter.alive, `les PV de B baissent côté serveur (${bBefore} → ${bAfter.hp})`);
 
+  // Système de points (récompense) : le snapshot porte des points par acteur, et
+  // ils s'accumulent (au moins par le déplacement des bots pendant le round).
+  ok(liveSnap.actors.every((x) => typeof x.points === 'number'), 'le snapshot expose les points par acteur');
+  const scored = await waitFor(A, 'val:snap', (s) => s.actors.some((x) => x.points > 0), 8000);
+  ok(scored.actors.some((x) => x.points > 0), 'des points sont accumulés pendant la partie (reward-shaping)');
+
   A.close(); B.close();
   cleanup();
   console.log(`smoke-valorant-online : ${n} vérifications OK`);

@@ -13,6 +13,7 @@ import { matchElo, globalElo, recentElo, record, history, BASE_ELO,
 import { botParams, LOSS_BOOST } from './bots/bot_difficulty.js';
 import { BotController, reassignRoles, ATK_ROLES, DEF_ROLES } from './bots/bot_controller.js';
 import { bearing } from './ui/damage_indicator.js';
+import { award, awardMovement, ranking, POINTS } from './points.js';
 
 const box = (min, max, ramp) => ({
   min: { x: min[0], y: min[1], z: min[2] },
@@ -574,6 +575,31 @@ ok(rm.phase === 'live', 'après la pose, éliminer les attaquants ne suffit plus
 rm.update(FUSE_TIME);
 ok(rm.winner === 0 && rm.phase === 'match', 'spike explosé : 3e round gagné, match terminé');
 near(rm.score[0], ROUNDS_TO_WIN, 'match remporté à 3 rounds gagnés');
+
+// --- Points / récompense (points.js) -------------------------------------------
+{
+  const A = { id: 'a', name: 'A', team: 0, pos: { x: 0, y: 0, z: 0 } };
+  const B = { id: 'b', name: 'B', team: 1, pos: { x: 0, y: 0, z: 0 }, matchKills: 3 };
+  award(A, 'kill');
+  ok(A.points === POINTS.kill && A.pts.kill === POINTS.kill, 'un kill crédite le barème kill');
+  award(A, 'plant');
+  award(A, 'roundWin');
+  ok(A.points === POINTS.kill + POINTS.plant + POINTS.roundWin, 'kill + pose + round cumulés');
+
+  // Déplacement : premier appel = référence, puis récompense proportionnelle à la distance.
+  A.pos.x = 0; awardMovement(A);
+  const before = A.points;
+  A.pos.x = 3; awardMovement(A); // 3 m
+  near(A.points - before, 3 * POINTS.perMeter, 'déplacement récompensé par mètre');
+  // Un saut > 5 m (respawn/téléport) n'est pas récompensé.
+  const before2 = A.points;
+  A.pos.x = 100; awardMovement(A);
+  ok(A.points === before2, 'un saut de position (respawn) ne rapporte rien');
+
+  const rk = ranking([A, B]);
+  ok(rk[0].id === 'a' && rk[0].points >= rk[1].points, 'classement décroissant par points');
+  ok(rk[1].kills === 3, 'le classement expose les kills du match');
+}
 
 console.log(`selftest : ${n} assertions OK`);
 if (typeof document !== 'undefined') {

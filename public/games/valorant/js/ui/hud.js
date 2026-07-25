@@ -139,19 +139,39 @@ export class Hud {
     this.board.update(s.time);
   }
 
-  // Écran de fin : score, MVP (meilleur au score), relance d'une recherche.
+  // Écran de fin : score + classement de points (récompense : kills, pose du
+  // spike, rounds gagnés, déplacement), joueurs et bots confondus.
   showEnd() {
     if (this.matchShown) return;
     this.matchShown = true;
     const { rm, actors, playerActor } = this.d;
     const my = playerActor.team;
-    const mvp = actors.reduce((m, a) => ((a.matchKills ?? 0) > (m.matchKills ?? 0) ? a : m));
+    const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+    const ranked = [...actors].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+    const rows = ranked.map((a, i) => {
+      const p = a.pts ?? {};
+      const detail = `kills ${p.kill ?? 0} · spike ${p.plant ?? 0} · rounds ${p.roundWin ?? 0} · déplacement ${p.move ?? 0}`;
+      return `<tr class="${a === playerActor ? 'me' : ''}" title="${detail}">
+        <td>${i + 1}</td>
+        <td class="nm">${esc(a.name)}${a.bot ? ' <em>bot</em>' : ''}</td>
+        <td class="pt">${Math.round(a.points ?? 0)}</td>
+        <td>${a.matchKills ?? 0}</td></tr>`;
+    }).join('');
     this.el.end.classList.add('on');
     this.el.end.innerHTML = `
       <h1>${rm.winner === my ? 'VICTOIRE' : 'DÉFAITE'}</h1>
       <div class="sc">${rm.score[my]} — ${rm.score[1 - my]}</div>
-      <div class="mvp">MVP · ${mvp.name} (${mvp.matchKills ?? 0} kills)</div>
-      <button>RELANCER UNE RECHERCHE</button>`;
+      <table class="rank" style="border-collapse:collapse;margin:8px auto;font:13px/1.7 ui-monospace,Consolas,monospace">
+        <thead><tr style="color:#4ee1e8;letter-spacing:.12em">
+          <th style="padding:2px 10px">#</th><th style="padding:2px 10px;text-align:left">JOUEUR</th>
+          <th style="padding:2px 10px">POINTS</th><th style="padding:2px 10px">KILLS</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <div class="mvp" style="opacity:.55">survole une ligne pour le détail de la récompense</div>
+      <button>RELANCER</button>`;
+    this.el.end.querySelectorAll('tr.me').forEach((tr) => { tr.style.color = '#9ef01a'; tr.style.fontWeight = '600'; });
+    this.el.end.querySelectorAll('.pt').forEach((td) => { td.style.color = '#ffc44d'; td.style.textAlign = 'center'; td.style.padding = '2px 10px'; });
+    this.el.end.querySelectorAll('td').forEach((td) => { if (!td.style.textAlign) { td.style.textAlign = 'center'; td.style.padding = '2px 10px'; } });
+    this.el.end.querySelectorAll('td.nm').forEach((td) => { td.style.textAlign = 'left'; });
     this.el.end.querySelector('button').addEventListener('click', () => location.reload());
     // Même règle que BuyMenu#show : toute UI qui prend le curseur pose `input.menu`,
     // sinon le listener de clic global d'input.js redemande le pointer lock à chaque

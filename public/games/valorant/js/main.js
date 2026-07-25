@@ -21,6 +21,7 @@ import { Hud } from './ui/hud.js';
 import { TeamIndicators } from './ui/team_indicators.js';
 import { createDebugHud } from '/shared/debug-hud.js';
 import { joinOnlineMatch } from './network/net_client.js';
+import { award, awardMovement } from './points.js';
 
 const ACTION = 'KeyF'; // pose et désamorçage
 
@@ -40,9 +41,14 @@ const agentKey = await selectAgent();
 //  - en ligne : matchmaking serveur (quickplay) → roster + map reçus à game:start ;
 //  - 1v3 : joueur seul contre 3 bots, difficulté choisie, 100 % local ;
 //  - 3v3-local : matchmaking cosmétique + bots locaux (comme avant, pour les tests).
+// Pseudo : réutilise celui saisi sur le portail (localStorage). En ligne, un
+// fallback aléatoire évite d'avoir plusieurs « Vous » dans la même partie.
+const myName = (localStorage.getItem('portail.name') || '').trim()
+  || (online ? 'Joueur' + Math.floor(100 + Math.random() * 900) : 'Vous');
+
 let lobby, botElo = 0, net = null;
 if (online) {
-  net = await joinOnlineMatch({ name: 'Vous', agentKey, onWait: showWait });
+  net = await joinOnlineMatch({ name: myName, agentKey, onWait: showWait });
   clearWait();
   mapId = net.mapId;
   const me = net.roster.find((r) => r.id === net.selfId);
@@ -106,7 +112,7 @@ const player = new Player(map.spawn);
 const loadout = new Loadout(agentKey, STARTING_ULT_POINTS);
 
 const playerActor = {
-  name: 'Vous', agentName: AGENTS[agentKey].name, team: lobby.playerTeam,
+  name: myName, agentName: AGENTS[agentKey].name, team: lobby.playerTeam,
   id: online ? net.selfId : 'you',
   pos: player.pos, hp: 100, maxHp: 100, shield: 0,
   alive: true, wallet: new Wallet(), kills: 0, matchKills: 0, matchDeaths: 0, player, loadout,
@@ -175,6 +181,7 @@ function kill(actor, by, via) {
     by.matchKills = (by.matchKills ?? 0) + 1;
     by.wallet.add(REWARD.kill);
     by.loadout?.addUlt();
+    award(by, 'kill'); // points de reward-shaping (distincts des crédits éco)
   }
   // Assists : avoir touché la victime dans les 4 dernières secondes, sans la tuer.
   const helpers = new Set();
@@ -366,6 +373,7 @@ const rm = new RoundManager({
     buy.hide();
     // Les bots de l'équipe perdante montent en niveau (spec : +2 à +5 % par round).
     for (const b of bots) if (b.a.team !== team) b.boost();
+    for (const a of actors) if (a.team === team) award(a, 'roundWin'); // récompense d'équipe
   },
 });
 
@@ -611,8 +619,9 @@ const botCtx = {
 };
 
 // --- Synchronisation réseau (mode en ligne uniquement) ---------------------------
-let netAcc = 0;    // accumulateur pour cadencer l'envoi de l'input (~30 Hz)
-let lastRound = 0; // détecte le changement de round pour réaligner le joueur au spawn
+let netAcc = 0;      // accumulateur pour cadencer l'envoi de l'input (~30 Hz)
+let lastRound = 0;   // détecte le changement de round pour réaligner le joueur au spawn
+let matchOver = false; // fin de match reçue : on fige l'écran de fin (plus de miroir)
 
 // Applique le dernier snapshot serveur : état de round et de spike (miroir pour le
 // HUD) + les autres acteurs (position interpolée, PV, vie). Le joueur local garde
@@ -641,6 +650,7 @@ function applyNet() {
   if (self) {
     playerActor.hp = self.hp; playerActor.shield = self.shield; playerActor.alive = self.alive;
     if (self.credits != null) playerActor.wallet.credits = self.credits;
+    playerActor.points = self.points ?? playerActor.points;
   }
 
   for (const a of actors) {
@@ -648,6 +658,11 @@ function applyNet() {
     const raw = byId.get(a.id);
     if (!raw) continue;
     a.hp = raw.hp; a.shield = raw.shield; a.team = raw.team; a.role = raw.role; a.alive = raw.alive;
+    a.points = raw.points ?? a.points;
+    // Nom/flag bot tenus à jour par le snapshot : un slot repris par un joueur qui
+    // rejoint en cours affiche son vrai pseudo chez tout le monde (pas l'ancien bot).
+    if (raw.name) a.name = raw.name;
+    a.bot = raw.bot;
     const ip = interp.get(a.id);
     if (ip && a.model) { a.model.position.set(ip.x, ip.y, ip.z); a.model.rotation.y = ip.yaw; }
     if (a.model) a.model.visible = a.alive;
@@ -669,14 +684,23 @@ if (online) {
     const t = actors.find((a) => a.id === d.targetId);
     if (t) hud.feed.add(by, t, d.via);
   });
-  net.on('end', (d) => { rm.phase = 'match'; rm.winner = d.winner; }); // écran de fin via le HUD
+  net.on('end', (d) => {
+    // Classement autoritaire du serveur : on recopie points + noms définitifs sur
+    // les acteurs (corrige aussi les noms d'un slot repris par un bot/humain).
+    for (const r of d.ranking ?? []) {
+      const a = actors.find((x) => x.id === r.id);
+      if (a) { a.points = r.points; a.pts = r.pts; a.name = r.name; }
+    }
+    rm.phase = 'match'; rm.winner = d.winner;
+    matchOver = true; // fige : applyNet ne remet plus la phase du dernier snapshot
+  });
 }
 
 renderer.setAnimationLoop(() => {
   const workStart = performance.now(); // pour le FPS moteur, mesuré en fin de frame
   const dt = Math.min(clock.getDelta(), 0.05); // évite de traverser un mur après un changement d'onglet
 
-  if (online) applyNet(); // aligne round/spike/acteurs sur le dernier snapshot serveur
+  if (online && !matchOver) applyNet(); // aligne round/spike/acteurs sur le dernier snapshot
 
   const wasAlive = playerActor.alive;
   const attacking = playerActor.team === rm.attackers;
@@ -684,6 +708,7 @@ renderer.setAnimationLoop(() => {
   // un round reste ainsi toujours jouable après la mort du joueur.
   const carrier = actors.find((a) => a.team === rm.attackers && a.alive && a.player)
     ?? actors.find((a) => a.team === rm.attackers && a.alive);
+  const wasPlanted = spike.planted; // pour la récompense de pose (local)
 
   if (!online) rm.update(dt); // en ligne, RoundManager tourne côté serveur (miroir via applyNet)
   // Le menu s'ouvre une fois par round : PRÊT le referme sans qu'il revienne.
@@ -739,6 +764,13 @@ renderer.setAnimationLoop(() => {
   if (!online && rm.live) {
     const ctx2 = { ...botCtx, attackers: rm.attackers, carrier, plan: botPlan };
     for (const b of bots) b.update(dt, ctx2);
+  }
+
+  // Récompenses (local) : pose du spike (au porteur) + déplacement pendant le round.
+  // En ligne, c'est le serveur qui les calcule (points reçus via le snapshot).
+  if (!online && rm.live) {
+    if (!wasPlanted && spike.planted) award(carrier, 'plant');
+    for (const a of actors) if (a.alive) awardMovement(a);
   }
 
   // Fin de match : une seule écriture, dans l'historique du mode joué. Les deux

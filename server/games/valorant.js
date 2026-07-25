@@ -28,6 +28,7 @@ import { BotController, reassignRoles, ATK_ROLES, DEF_ROLES } from '../../public
 import { assignTeams } from '../../public/games/valorant/js/matchmaking.js';
 import { MAPS, toCollider, siteAt as siteAtRaw, siteCenter, spawnSet } from '../../public/games/valorant/js/maps/map_loader.js';
 import { blocked, groundHeight } from '../../public/games/valorant/js/player.js';
+import { award, awardMovement, ranking } from '../../public/games/valorant/js/points.js';
 
 // Doit rester aligné sur les agents réellement définis côté client (abilities.js).
 const AGENT_KEYS = ['jett', 'sova', 'brimstone', 'sage'];
@@ -205,6 +206,7 @@ export function createValorantGame(io, room, opts = {}) {
     actor.matchDeaths++;
     if (by && by !== actor && by.team !== actor.team) {
       by.kills++; by.matchKills++; by.wallet.add(REWARD.kill);
+      award(by, 'kill'); // récompense de reward-shaping (distincte des crédits éco)
     }
     emit('val:kill', { byId: by?.id ?? null, byName: by?.name ?? null, targetId: actor.id, targetName: actor.name, via: via ?? null });
     succeedRoles(actor.team);
@@ -334,6 +336,7 @@ export function createValorantGame(io, room, opts = {}) {
       const attackers = rm.attackers;
       const carrier = actors.find((a) => a.team === attackers && a.alive && !a.bot)
         ?? actors.find((a) => a.team === attackers && a.alive);
+      const wasPlanted = spike.planted;
 
       // Pose/désamorçage des HUMAINS (les bots s'en chargent dans leur decide()).
       for (const a of actors) {
@@ -348,6 +351,10 @@ export function createValorantGame(io, room, opts = {}) {
 
       const ctx2 = { ...botCtx, attackers, carrier, plan: botPlan };
       for (const bc of bots) bc.update(dt, ctx2);
+
+      // Récompenses : pose du spike (au porteur) + déplacement pendant le round.
+      if (!wasPlanted && spike.planted) award(carrier, 'plant');
+      for (const a of actors) if (a.alive) awardMovement(a);
 
       tickTeleports();
     }
@@ -389,7 +396,10 @@ export function createValorantGame(io, room, opts = {}) {
     rm = new RoundManager({
       spike, players: actors, aliveCount, resetRound,
       allReady: () => actors.every((a) => !a.alive || a.ready),
-      onRoundEnd: (team) => { for (const bc of bots) if (bc.a.team !== team) bc.boost(); },
+      onRoundEnd: (team) => {
+        for (const bc of bots) if (bc.a.team !== team) bc.boost();
+        for (const a of actors) if (a.team === team) award(a, 'roundWin'); // récompense d'équipe
+      },
     });
     emit('game:start', startPayload());
   }
@@ -400,6 +410,7 @@ export function createValorantGame(io, room, opts = {}) {
     emit('game:end', {
       winner: rm.winner,
       score: rm.score,
+      ranking: ranking(actors), // classement de points (joueurs + bots), décroissant
       players: actors.filter((a) => !a.bot).map((a) => ({ id: a.id, name: a.name, kills: a.matchKills, deaths: a.matchDeaths, won: a.team === rm.winner })),
     });
     opts.onEnd?.(room, { aborted: false });
@@ -449,10 +460,10 @@ export function createValorantGame(io, room, opts = {}) {
       phase: rm.phase, round: rm.round, timer: Math.max(0, rm.timer), score: rm.score, attackers: rm.attackers,
       spike: { state: spike.state, x: spike.pos?.x ?? null, y: spike.pos?.y ?? null, z: spike.pos?.z ?? null, fuse: spike.fuse, plant: spike.plant, defuse: spike.defuse },
       actors: actors.map((a) => ({
-        id: a.id, team: a.team, bot: a.bot, alive: a.alive,
+        id: a.id, name: a.name, team: a.team, bot: a.bot, alive: a.alive,
         x: round1(a.pos.x), y: round1(a.pos.y), z: round1(a.pos.z),
         yaw: round2(a.model.rotation.y ?? a.yaw), hp: Math.round(a.hp), shield: Math.round(a.shield),
-        weapon: a.weapon, role: a.role, ready: a.ready,
+        weapon: a.weapon, role: a.role, ready: a.ready, points: Math.round(a.points ?? 0),
         credits: a.bot ? undefined : a.wallet.credits,
       })),
     };

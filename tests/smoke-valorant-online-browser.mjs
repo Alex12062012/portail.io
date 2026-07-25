@@ -75,6 +75,17 @@ try {
   });
   ok(botPlaced > 0.01, 'les bots distants sont positionnés via les snapshots (interpolation)');
 
+  // Écran de fin : le classement de points se rend correctement (6 lignes, colonne POINTS).
+  const endInfo = await page.evaluate(() => {
+    window.actors.forEach((a, i) => { a.points = (i + 1) * 10; a.pts = { kill: 0, plant: 0, roundWin: 0, move: (i + 1) * 10 }; });
+    window.rm.winner = window.playerActor.team;
+    window.hud.showEnd();
+    const rows = document.querySelectorAll('#endscreen table.rank tbody tr');
+    return { rows: rows.length, hasPoints: /POINTS/.test(document.querySelector('#endscreen').textContent) };
+  });
+  ok(endInfo.rows === 6, `écran de fin : classement de 6 lignes (${endInfo.rows})`);
+  ok(endInfo.hasPoints, 'écran de fin : colonne POINTS présente');
+
   // Aucune erreur console/page pendant tout le parcours en ligne.
   ok(errors.length === 0, 'aucune erreur console/page en mode en ligne');
 
