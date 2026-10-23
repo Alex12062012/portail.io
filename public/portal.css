@@ -153,6 +153,16 @@ main {
     radial-gradient(150px 80px at 30% 20%, rgba(78, 225, 232, .3), transparent 70%),
     linear-gradient(160deg, #1a2436, #10161f);
 }
+.sillage-art {
+  background:
+    radial-gradient(150px 80px at 50% 85%, rgba(255, 255, 255, .28), transparent 70%),
+    linear-gradient(160deg, #3d7ed0, #1b2f55);
+}
+.marsforge-art {
+  background:
+    radial-gradient(150px 80px at 60% 80%, rgba(255, 122, 60, .4), transparent 70%),
+    linear-gradient(160deg, #4a2016, #1f120f);
+}
 .soon-art {
   background: linear-gradient(160deg, #1c1f38, #14162a);
   color: #3c4170;
