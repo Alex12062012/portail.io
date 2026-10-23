@@ -4,8 +4,19 @@ Portail de mini-jeux jouables entre amis, hébergé sur un PC et accessible aux
 autres via un tunnel **ngrok**. Stack : **Express + Socket.io + Canvas 2D**,
 HTML/CSS/JS vanilla (aucun framework front).
 
-Premier jeu inclus : **Tag Arena** — le jeu du chat en platformer 2D online
-(2 à 4 joueurs, bots inclus en partie publique), inspiré de TAG 2 (WeLoPlay).
+![Page d'accueil du portail](docs/captures/accueil.jpg)
+
+## Les jeux
+
+| Jeu | En bref | Où il tourne |
+|---|---|---|
+| **Tag Arena** | le jeu du chat en platformer 2D online (2 à 4 joueurs, bots en partie publique), inspiré de TAG 2 (WeLoPlay) | sur le portail (Socket.io) |
+| **Mine Coop** | bac à sable 2D en coop : mine, fabrique, construis et survis aux zombies la nuit (1 à 4 joueurs, monde partagé sauvegardé) | sur le portail (Socket.io) |
+| **Valorant-like** | FPS tactique 3D en chantier, 3v3 en ligne avec des bots entraînés | sur le portail (Socket.io) |
+| **Sillage** | ski en 3D : carve, vitesse, sauts, 3 pistes et 27 étoiles ([code](https://github.com/Alex12062012/sillage)) | lien vers https://sillage-hazel-kappa.vercel.app |
+| **Marsforge** | terraformation de Mars en pixel art, seul ou à plusieurs ([code](https://github.com/Alex12062012/terraform-mars)) | lien vers https://terraform-mars-lovat.vercel.app |
+
+Les deux derniers sont hébergés sur Vercel : leurs cartes ouvrent le jeu dans un nouvel onglet, et ils restent jouables même quand le PC du portail est éteint.
 
 ## Lancement
 
