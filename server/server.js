@@ -16,6 +16,7 @@ import { RoomManager } from './rooms.js';
 import { createTagGame } from './games/tag-arena.js';
 import { createMineGame } from './games/mine-coop.js';
 import { createValorantGame } from './games/valorant.js';
+import { createSillageRelay } from './games/sillage.js';
 import { TAG } from '../shared/tag-map.js';
 import { loadSaveIfExists, listSaves, randomSeed } from './mine-save.js';
 import { registerModels } from '../public/games/valorant/js/bots/bot_controller.js';
@@ -64,8 +65,11 @@ app.use(express.static(path.join(ROOT, 'public')));
 app.use('/shared', express.static(path.join(ROOT, 'shared')));
 
 const server = http.createServer(app);
-const io = new Server(server);
+// Sillage (hébergé sur Vercel) se connecte d'un autre domaine pour son free ride en ligne
+const SILLAGE_ORIGINS = [/^https:\/\/sillage[a-z0-9-]*\.vercel\.app$/, /^http:\/\/localhost:(5180|4180)$/];
+const io = new Server(server, { cors: { origin: SILLAGE_ORIGINS } });
 const rooms = new RoomManager();
+const sillage = createSillageRelay(io);
 
 const cleanName = raw => {
   const s = String(raw ?? '').trim().slice(0, 16);
@@ -141,6 +145,7 @@ function leaveCurrent(socket) {
 }
 
 io.on('connection', socket => {
+  sillage.connect(socket); // free ride de Sillage : relais des positions par station
   // ping du HUD de debug : réponse immédiate via l'ack (avec ou sans payload)
   socket.on('hud:ping', (...args) => {
     const cb = args[args.length - 1];
